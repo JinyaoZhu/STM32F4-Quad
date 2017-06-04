@@ -1,0 +1,7 @@
+%YAML:1.0
+warpMat: !!opencv-matrix
+   rows: 0
+   cols: 0
+   dt: u
+   data: []
+scale: 6.1727911233901978e-001
