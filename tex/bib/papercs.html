@@ -1,0 +1,3452 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+<title>JabRef References output</title>
+<meta http-equiv="Content-Type" content="text/html; charset=GBK">
+<script type="text/javascript">
+<!--
+// QuickSearch script for JabRef HTML export 
+// Version: 2.0
+//
+// Copyright (c) 2006-2008, Mark Schenk
+//
+// This software is distributed under a Creative Commons Attribution 3.0 License
+// http://creativecommons.org/licenses/by/3.0/
+
+// Some features:
+// + optionally searches Abstracts and Reviews
+// + allows RegExp searches
+//   e.g. to search for entries between 1980 and 1989, type:  198[0-9]
+//   e.g. for any entry ending with 'symmetry', type:  symmetry$
+//   e.g. for all reftypes that are books: ^book$, or ^article$
+//   e.g. for entries by either John or Doe, type john|doe
+// + easy toggling of Abstract/Review/BibTeX
+
+// Search settings
+var searchAbstract = true;
+var searchReview = true;
+
+// Speed optimisation introduced some esoteric problems with certain RegExp searches
+// e.g. if the previous search is 200[-7] and the next search is 200[4-7] then the search doesn't work properly until the next 'keyup'
+// hence the searchOpt can be turned off for RegExp adepts
+var searchOpt = true;
+
+if (window.addEventListener) {
+	window.addEventListener("load",initSearch,false); }
+else if (window.attachEvent) {
+	window.attachEvent("onload", initSearch); }
+
+function initSearch() {
+	// basic object detection
+	if(!document.getElementById || !document.getElementsByTagName) { return; }
+	if (!document.getElementById('qstable')||!document.getElementById('qs')) { return; }
+
+	// find QS table and appropriate rows
+	searchTable = document.getElementById('qstable');
+	var allRows = searchTable.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+	// split all rows into entryRows and infoRows (e.g. abstract, review, bibtex)
+	entryRows = new Array();
+	infoRows = new Array(); absRows = new Array(); revRows = new Array();
+
+	for (var i=0, k=0, j=0; i<allRows.length;i++) {
+		if (allRows[i].className.match(/entry/)) {
+			entryRows[j++] = allRows[i];
+		} else {
+			infoRows[k++] = allRows[i];
+			// check for abstract/review
+			if (allRows[i].className.match(/abstract/)) {
+				absRows.push(allRows[i]);
+			} else if (allRows[i].className.match(/review/)) {
+				revRows.push(allRows[i]);
+			}
+		}
+	}
+
+	//number of entries and rows
+	numRows = allRows.length;
+	numEntries = entryRows.length;
+	numInfo = infoRows.length;
+	numAbs = absRows.length;
+	numRev = revRows.length;
+
+	//find the query field
+	qsfield = document.getElementById('qsfield');
+
+	// previous search term; used for speed optimisation
+	prevSearch = '';
+
+	//find statistics location
+	stats = document.getElementById('stat');
+	setStatistics(-1);
+
+	// creates the appropriate search settings
+	createQSettingsDialog();
+
+	// shows the searchfield
+	document.getElementById('qs').style.display = 'block';
+	document.getElementById('qsfield').onkeyup = testEvent;
+}
+
+function quickSearch(tInput){
+
+	 if (tInput.value.length == 0) {
+		showAll();
+		setStatistics(-1);
+		qsfield.className = '';
+		return;
+	} else {
+		// only search for valid RegExp
+		try {
+			var searchText = new RegExp(tInput.value,"i")
+			closeAllInfo();
+			qsfield.className = '';
+		}
+		catch(err) {
+			prevSearch = tInput.value;
+			qsfield.className = 'invalidsearch';
+			return;
+		}
+	}
+	
+	// count number of hits
+	var hits = 0;
+
+	// start looping through all entry rows
+	for (var i = 0; cRow = entryRows[i]; i++){
+
+		// only show search the cells if it isn't already hidden OR if the search term is getting shorter, then search all
+		// some further optimisation is possible: if the search string is getting shorter, and the row is already visible, skip it. Then be careful with hits!
+		if(!searchOpt || cRow.className.indexOf('noshow')==-1 || tInput.value.length <= prevSearch.length){
+			var found = false; 
+
+			var inCells = cRow.getElementsByTagName('td');
+			var numCols = inCells.length;
+				
+			for (var j=0; j<numCols; j++) {
+				cCell = inCells[j];
+				var t = cCell.innerText?cCell.innerText:getTextContent(cCell);
+				if (t.search(searchText) != -1){ 
+					found=true; 
+					break;
+				} 
+			}
+
+			// look for further hits in Abstract and Review
+			if(!found) {
+				var articleid = cRow.id;
+				if(searchAbstract && (abs = document.getElementById('abs_'+articleid))) {
+					if (getTextContent(abs).search(searchText) != -1){ found=true; } 
+				}
+				if(searchReview && (rev = document.getElementById('rev_'+articleid))) {
+					if (getTextContent(rev).search(searchText) != -1){ found=true; } 
+				}
+			}
+			
+			if(found) {
+				cRow.className = 'entry show';
+				hits++;
+			} else {
+				cRow.className = 'entry noshow';
+			}
+		}
+	}
+
+	// update statistics
+	setStatistics(hits)
+	
+	// set previous search value
+	prevSearch = tInput.value;
+}
+
+function toggleInfo(articleid,info) {
+
+	var entry = document.getElementById(articleid);
+	var abs = document.getElementById('abs_'+articleid);
+	var rev = document.getElementById('rev_'+articleid);
+	var bib = document.getElementById('bib_'+articleid);
+	
+	if (abs && info == 'abstract') {
+		if(abs.className.indexOf('abstract') != -1) {
+		abs.className.indexOf('noshow') == -1?abs.className = 'abstract noshow':abs.className = 'abstract';
+		}
+	} else if (rev && info == 'review') {
+		if(rev.className.indexOf('review') != -1) {
+		rev.className.indexOf('noshow') == -1?rev.className = 'review noshow':rev.className = 'review';
+		}
+	} else if (bib && info == 'bibtex') {
+		if(bib.className.indexOf('bibtex') != -1) {
+		bib.className.indexOf('noshow') == -1?bib.className = 'bibtex noshow':bib.className = 'bibtex';
+		}		
+	} else { 
+		return;
+	}
+
+	// check if one or the other is available
+	var revshow = false;
+	var absshow = false;
+	var bibshow = false;
+	(abs && abs.className.indexOf('noshow') == -1)? absshow = true: absshow = false;
+	(rev && rev.className.indexOf('noshow') == -1)? revshow = true: revshow = false;	
+	(bib && bib.className == 'bibtex')? bibshow = true: bibshow = false;
+	
+	// highlight original entry
+	if(entry) {
+		if (revshow || absshow || bibshow) {
+		entry.className = 'entry highlight show';
+		} else {
+		entry.className = 'entry show';
+		}		
+	}
+	
+	// When there's a combination of abstract/review/bibtex showing, need to add class for correct styling
+	if(absshow) {
+		(revshow||bibshow)?abs.className = 'abstract nextshow':abs.className = 'abstract';
+	} 
+	if (revshow) {
+		bibshow?rev.className = 'review nextshow': rev.className = 'review';
+	}
+	
+}
+
+function setStatistics (hits) {
+	if(hits < 0) { hits=numEntries; }
+	if(stats) { stats.firstChild.data = hits + '/' + numEntries}
+}
+
+function getTextContent(node) {
+	// Function written by Arve Bersvendsen
+	// http://www.virtuelvis.com
+	
+	if (node.nodeType == 3) {
+	return node.nodeValue;
+	} // text node
+	if (node.nodeType == 1) { // element node
+	var text = [];
+	for (var chld = node.firstChild;chld;chld=chld.nextSibling) {
+		text.push(getTextContent(chld));
+	}
+	return text.join("");
+	} return ""; // some other node, won't contain text nodes.
+}
+
+function showAll(){
+	// first close all abstracts, reviews, etc.
+	closeAllInfo();
+
+	for (var i = 0; i < numEntries; i++){
+		entryRows[i].className = 'entry show'; 
+	}
+}
+
+function closeAllInfo(){
+	for (var i=0; i < numInfo; i++){
+		if (infoRows[i].className.indexOf('noshow') ==-1) {
+			infoRows[i].className = infoRows[i].className + ' noshow';
+		}
+	}
+}
+
+function testEvent(e){
+	if (!e) var e = window.event;
+	quickSearch(this);
+}
+
+function clearQS() {
+	qsfield.value = '';
+	quickSearch(qsfield);
+}
+
+function redoQS(){
+	showAll();
+	quickSearch(qsfield);
+}
+
+// Create Search Settings
+
+function toggleQSettingsDialog() {
+
+	var qssettings = document.getElementById('qssettings');
+	
+	if(qssettings.className.indexOf('active')==-1) {
+		qssettings.className = 'active';
+
+		if(absCheckBox && searchAbstract == true) { absCheckBox.checked = 'checked'; }
+		if(revCheckBox && searchReview == true) { revCheckBox.checked = 'checked'; }
+
+	} else {
+		qssettings.className= '';
+	}
+}
+
+function createQSettingsDialog(){
+	var qssettingslist = document.getElementById('qssettings').getElementsByTagName('ul')[0];
+	
+	if(numAbs!=0) {
+		var x = document.createElement('input');
+		x.id = "searchAbs";
+		x.type = "checkbox";
+		x.onclick = toggleQSetting;
+		var y = qssettingslist.appendChild(document.createElement('li')).appendChild(document.createElement('label'));
+		y.appendChild(x);
+		y.appendChild(document.createTextNode('search abstracts'));		
+	}
+	if(numRev!=0) {
+		var x = document.createElement('input');
+		x.id = "searchRev";
+		x.type = "checkbox";		
+		x.onclick = toggleQSetting;
+		var y = qssettingslist.appendChild(document.createElement('li')).appendChild(document.createElement('label'));		
+		y.appendChild(x);		
+		y.appendChild(document.createTextNode('search reviews'));
+	}
+		
+	// global variables
+	absCheckBox = document.getElementById('searchAbs');
+	revCheckBox = document.getElementById('searchRev');
+	
+	// show search settings
+	if(absCheckBox||revCheckBox) {
+		document.getElementById('qssettings').style.display = 'block';
+	}
+}
+
+function toggleQSetting() {
+	if(this.id=='searchAbs') { searchAbstract = !searchAbstract; }
+	if(this.id=='searchRev') { searchReview = !searchReview; }
+	redoQS()
+} 
+-->
+</script>
+<style type="text/css">
+body { background-color: white; font-family: "Trebuchet MS", Arial, sans-serif; font-size: 12px; line-height: 1.2; padding: 1em; color: #2E2E2E; }
+
+#qs { width: auto; border-style: solid; border-color: gray; border-width: 1px 1px 0px 1px; padding: 0.5em 0.5em; display:none; position:relative; }
+#qs form { padding: 0px; margin: 0px; }
+#qs form p { padding: 0px; margin: 0px; }
+
+.invalidsearch { background-color: red; }
+
+table { border: 1px gray solid; width: 100%; empty-cells: show; }
+th, td { border: 1px gray solid; padding: 0.5em; vertical-align: top;  }
+td { text-align: left; vertical-align: top; }
+th { background-color: #EFEFEF; }
+
+td a { color: navy; text-decoration: none; }
+td a:hover  { text-decoration: underline; }
+
+tr.noshow { display: none;}
+
+tr.highlight td { background-color: #F1F1F1; border-top: 2px black solid; font-weight: bold; }
+tr.abstract td, tr.review td, tr.bibtex td { background-color: #F1F1F1; border-bottom: 2px black solid; }
+tr.nextshow td { border-bottom: 1px gray solid; }
+
+tr.bibtex pre { width: 100%; overflow: auto;}
+
+p.infolinks { margin: 0.5em 0em 0em 0em; padding: 0px; }
+
+#qssettings { padding: 0.5em; position: absolute; top: 0.2em; right: 0.2em; border: 1px gray solid; background-color: white; display: none; }
+#qssettings p { font-weight: bold; cursor: pointer; }
+#qssettings ul { display: none; list-style-type: none; padding-left: 0; margin: 0; }
+#qssettings.active ul { display: block; }
+
+@media print {
+	p.infolinks, #qssettings, #qs { display: none !important; }
+	table { border-width: 0px; }
+	tr { page-break-inside: avoid; }
+	tr > * + * + * + * + * {display: none; }
+	thead tr::before { content: "Reference"; border: 1px gray solid; padding: 0.5em; vertical-align: top; font-weight: bold; text-align: center; display: table-cell; background-color: #EFEFEF; }
+	tr[id]::before { content: attr(id); display: table-cell; border: 1px gray solid; padding: 0.5em; vertical-align: top; font-style: italic; }
+}
+</style>
+</head>
+<body>
+
+<div id="qs">
+	<form action="">
+	<p>QuickSearch: <input type="text" name="qsfield" id="qsfield" autocomplete="off" title="Allows plain text as well as RegExp searches" /><input type="button" onclick="clearQS()" value="clear" />&nbsp; Number of matching entries: <span id="stat">0</span>.</p>
+	<div id="qssettings">
+		<p onclick="toggleQSettingsDialog()">Search Settings</p>
+		<ul></ul>
+	</div>
+	</form>
+</div>
+<table id="qstable" border="1">
+<thead><tr><th width="20%">Author</th><th width="30%">Title</th><th width="5%">Year</th><th width="30%">Journal/Proceedings</th><th width="10%">Reftype</th><th width="5%">DOI/URL</th></tr></thead>
+<tbody><tr id="Achlioptas2001" class="entry">
+	<td>Achlioptas, D.</td>
+	<td>Database-friendly Random Projections <p class="infolinks">[<a href="javascript:toggleInfo('Achlioptas2001','bibtex')">BibTeX</a>]</p></td>
+	<td>2001</td>
+	<td>Proc. 20th ACM SIGMOD-SIGACT-SIGART symposium on Principles of database systems (PODS), pp. 274-281&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://doi.acm.org/10.1145/375551.375608">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Achlioptas2001" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Achlioptas2001,
+  author = {Achlioptas, Dimitris},
+  title = {Database-friendly Random Projections},
+  booktitle = {Proc. 20th ACM SIGMOD-SIGACT-SIGART symposium on Principles of database systems (PODS)},
+  publisher = {ACM},
+  year = {2001},
+  pages = {274--281},
+  doi = {http://doi.acm.org/10.1145/375551.375608}
+}
+</pre></td>
+</tr>
+<tr id="Applebaum2009a" class="entry">
+	<td>Applebaum, L., Howard, S., Searle, S. &amp; Calderbank, R.</td>
+	<td>Chirp Sensing Codes: Deterministic Compressed Sensing Measurements for Fast Recovery <p class="infolinks">[<a href="javascript:toggleInfo('Applebaum2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Applied and Computational Harmonic Analysis<br/>Vol. 26(2), pp. 283-290&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Applebaum2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Applebaum2009a,
+  author = {Applebaum, L. and Howard, S.D. and Searle, S. and Calderbank, R.},
+  title = {Chirp Sensing Codes: Deterministic Compressed Sensing Measurements for Fast Recovery},
+  journal = {Applied and Computational Harmonic Analysis},
+  publisher = {Elsevier},
+  year = {2009},
+  volume = {26},
+  number = {2},
+  pages = {283--290}
+}
+</pre></td>
+</tr>
+<tr id="Babacan2010" class="entry">
+	<td>Babacan, S.D., Molina, R. &amp; Katsaggelos, A.K.</td>
+	<td>Bayesian Compressive Sensing Using Laplace Priors <p class="infolinks">[<a href="javascript:toggleInfo('Babacan2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Image. Process.<br/>Vol. 19(1), pp. 53-63&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIP.2009.2032894">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Babacan2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Babacan2010,
+  author = {Babacan, S. D. and Molina, R. and Katsaggelos, A. K.},
+  title = {Bayesian Compressive Sensing Using Laplace Priors},
+  journal = {IEEE T. Image. Process.},
+  year = {2010},
+  volume = {19},
+  number = {1},
+  pages = {53--63},
+  doi = {http://dx.doi.org/10.1109/TIP.2009.2032894}
+}
+</pre></td>
+</tr>
+<tr id="Babacan2009" class="entry">
+	<td>Babacan, S.D., Molina, R. &amp; Katsaggelos, A.K.</td>
+	<td>Fast Bayesian Compressive Sensing using Laplace Priors <p class="infolinks">[<a href="javascript:toggleInfo('Babacan2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>ICASSP, pp. 2873-2876&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2009.4960223">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Babacan2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Babacan2009,
+  author = {Babacan, S. D. and Molina, R. and Katsaggelos, A. K.},
+  title = {Fast Bayesian Compressive Sensing using Laplace Priors},
+  booktitle = {ICASSP},
+  year = {2009},
+  pages = {2873--2876},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2009.4960223}
+}
+</pre></td>
+</tr>
+<tr id="Bajwa2007" class="entry">
+	<td>Bajwa, W.U., Haupt, J.D., Raz, G.M., Wright, S.J. &amp; Nowak, R.D.</td>
+	<td>Toeplitz-structured Compressed Sensing Matrices <p class="infolinks">[<a href="javascript:toggleInfo('Bajwa2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>IEEE Workshop SSP&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Bajwa2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Bajwa2007,
+  author = {Bajwa, Waheed U. and Haupt, Jarvis D. and Raz, Gil M. and Wright, Stephen J. and Nowak, Robert D.},
+  title = {Toeplitz-structured Compressed Sensing Matrices},
+  booktitle = {IEEE Workshop SSP},
+  year = {2007}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk2008" class="entry">
+	<td>Baraniuk, R.</td>
+	<td>Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proc. Conference on Information Sciences and Systems (CISS), pp. iv-v&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/CISS.2008.4558479">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Baraniuk2008,
+  author = {Baraniuk, R.},
+  title = {Compressive Sensing},
+  booktitle = {Proc. Conference on Information Sciences and Systems (CISS)},
+  year = {2008},
+  pages = {iv--v},
+  doi = {http://dx.doi.org/10.1109/CISS.2008.4558479}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk1999" class="entry">
+	<td>Baraniuk, R.</td>
+	<td>Optimal Tree Approximation with Wavelets <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk1999','bibtex')">BibTeX</a>]</p></td>
+	<td>1999</td>
+	<td>Wavelet Applications in Signal and Image Processing VII, volume 3813 of SPIE Proceedings, pp. 196-207&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk1999" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Baraniuk1999,
+  author = {Richard Baraniuk},
+  title = {Optimal Tree Approximation with Wavelets},
+  booktitle = {Wavelet Applications in Signal and Image Processing VII, volume 3813 of SPIE Proceedings},
+  year = {1999},
+  pages = {196--207}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk2008a" class="entry">
+	<td>Baraniuk, R., Davenport, M., DeVore, R. &amp; Wakin, M.</td>
+	<td>A Simple Proof of the Restricted Isometry Property for Random Matrices <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Constructive Approximation<br/>Vol. 28(3), pp. 253-263&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Baraniuk2008a,
+  author = {Richard Baraniuk and Mark Davenport and Ronald DeVore and Michael Wakin},
+  title = {A Simple Proof of the Restricted Isometry Property for Random Matrices},
+  journal = {Constructive Approximation},
+  year = {2008},
+  volume = {28},
+  number = {3},
+  pages = {253-263}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk2007a" class="entry">
+	<td>Baraniuk, R. &amp; Steeghs, P.</td>
+	<td>Compressive Radar Imaging <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk2007a','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proc. IEEE Radar Conference, pp. 128-133&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/RADAR.2007.374203">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk2007a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Baraniuk2007a,
+  author = {Baraniuk, R. and Steeghs, P.},
+  title = {Compressive Radar Imaging},
+  booktitle = {Proc. IEEE Radar Conference},
+  year = {2007},
+  pages = {128--133},
+  doi = {http://dx.doi.org/10.1109/RADAR.2007.374203}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk2007" class="entry">
+	<td>Baraniuk, R.G.</td>
+	<td>Compressive Sensing [Lecture Notes] <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>IEEE Signal. Proc. Mag.<br/>Vol. 24(4), pp. 118-121&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/MSP.2007.4286571">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Baraniuk2007,
+  author = {Baraniuk, R. G.},
+  title = {Compressive Sensing [Lecture Notes]},
+  journal = {IEEE Signal. Proc. Mag.},
+  year = {2007},
+  volume = {24},
+  number = {4},
+  pages = {118--121},
+  doi = {http://dx.doi.org/10.1109/MSP.2007.4286571}
+}
+</pre></td>
+</tr>
+<tr id="Baraniuk2010" class="entry">
+	<td>Baraniuk, R.G., Cevher, V., Duarte, M.F. &amp; Hegde, C.</td>
+	<td>Model-Based Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Baraniuk2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 56(4), pp. 1982-2001&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2010.2040894">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Baraniuk2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Baraniuk2010,
+  author = {Baraniuk, R. G. and Cevher, V. and Duarte, M. F. and Hegde, C.},
+  title = {Model-Based Compressive Sensing},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2010},
+  volume = {56},
+  number = {4},
+  pages = {1982--2001},
+  doi = {http://dx.doi.org/10.1109/TIT.2010.2040894}
+}
+</pre></td>
+</tr>
+<tr id="Baron2010" class="entry">
+	<td>Baron, D., Sarvotham, S. &amp; Baraniuk, R.G.</td>
+	<td>Bayesian Compressive Sensing Via Belief Propagation <p class="infolinks">[<a href="javascript:toggleInfo('Baron2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(1), pp. 269-280&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2009.2027773">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Baron2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Baron2010,
+  author = {Baron, D. and Sarvotham, S. and Baraniuk, R. G.},
+  title = {Bayesian Compressive Sensing Via Belief Propagation},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2010},
+  volume = {58},
+  number = {1},
+  pages = {269--280},
+  doi = {http://dx.doi.org/10.1109/TSP.2009.2027773}
+}
+</pre></td>
+</tr>
+<tr id="Beal2003" class="entry">
+	<td>Beal, M.</td>
+	<td>Variational Algorithms for Approximate Bayesian Inference <p class="infolinks">[<a href="javascript:toggleInfo('Beal2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><i>School</i>: Gatsby Computational Neuroscience Unit, University College London&nbsp;</td>
+	<td>phdthesis</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Beal2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@phdthesis{Beal2003,
+  author = {Beal, M.},
+  title = {Variational Algorithms for Approximate Bayesian Inference},
+  school = {Gatsby Computational Neuroscience Unit, University College London},
+  year = {2003}
+}
+</pre></td>
+</tr>
+<tr id="Berinde2008a" class="entry">
+	<td>Berinde, R., Gilbert, A., Indyk, P., Karloff, H. &amp; Strauss, M.</td>
+	<td>Combining Geometry and Combinatorics: A Unified Approach to Sparse Signal Recovery <p class="infolinks">[<a href="javascript:toggleInfo('Berinde2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Communication, Control, and Computing, 2008 46th Annual Allerton Conference on2008 46th Annual Allerton Conference on Communication, Control, and Computing,, pp. 798 -805&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ALLERTON.2008.4797639">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Berinde2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Berinde2008a,
+  author = {Berinde, R. and Gilbert, A.C. and Indyk, P. and Karloff, H. and Strauss, M.J.},
+  title = {Combining Geometry and Combinatorics: A Unified Approach to Sparse Signal Recovery},
+  booktitle = {2008 46th Annual Allerton Conference on Communication, Control, and Computing,},
+  journal = {Communication, Control, and Computing, 2008 46th Annual Allerton Conference on},
+  year = {2008},
+  pages = {798 -805},
+  doi = {http://dx.doi.org/10.1109/ALLERTON.2008.4797639}
+}
+</pre></td>
+</tr>
+<tr id="Berinde2008" class="entry">
+	<td>Berinde, R. &amp; Indyk, P.</td>
+	<td>Sparse Recovery using Sparse Random Matrices <p class="infolinks">[<a href="javascript:toggleInfo('Berinde2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>&nbsp;</td>
+	<td>techreport</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Berinde2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@techreport{Berinde2008,
+  author = {Berinde, R. and Indyk, P.},
+  title = {Sparse Recovery using Sparse Random Matrices},
+  year = {2008}
+}
+</pre></td>
+</tr>
+<tr id="Bertalmio2003" class="entry">
+	<td>Bertalmio, M., Vese, L., Sapiro, G. &amp; Osher, S.</td>
+	<td>Simultaneous Structure and Texture Image Inpainting <p class="infolinks">[<a href="javascript:toggleInfo('Bertalmio2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><br/>Vol. 2CVPR&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/CVPR.2003.1211536">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bertalmio2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Bertalmio2003,
+  author = {Bertalmio, M. and Vese, L. and Sapiro, G. and Osher, S.},
+  title = {Simultaneous Structure and Texture Image Inpainting},
+  booktitle = {CVPR},
+  year = {2003},
+  volume = {2},
+  doi = {http://dx.doi.org/10.1109/CVPR.2003.1211536}
+}
+</pre></td>
+</tr>
+<tr id="Bertalmio2003a" class="entry">
+	<td>Bertalmio, M., Vese, L., Sapiro, G. &amp; Osher, S.</td>
+	<td>Image Filling-in in a Decomposition Space <p class="infolinks">[<a href="javascript:toggleInfo('Bertalmio2003a','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><br/>Vol. 1ICIP&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICIP.2003.1247097">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bertalmio2003a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Bertalmio2003a,
+  author = {Bertalmio, M. and Vese, L. and Sapiro, G. and Osher, S. },
+  title = {Image Filling-in in a Decomposition Space},
+  booktitle = {ICIP},
+  year = {2003},
+  volume = {1},
+  doi = {http://dx.doi.org/10.1109/ICIP.2003.1247097}
+}
+</pre></td>
+</tr>
+<tr id="Bertalmio2003b" class="entry">
+	<td>Bertalmio, M., Vese, L., Sapiro, G. &amp; Osher, S.</td>
+	<td>Simultaneous Structure and Texture Image Inpainting <p class="infolinks">[<a href="javascript:toggleInfo('Bertalmio2003b','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td>IEEE T. Image. Process.<br/>Vol. 12(8), pp. 882-889&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIP.2003.815261">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bertalmio2003b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Bertalmio2003b,
+  author = {Bertalmio, M. and Vese, L. and Sapiro, G. and Osher, S.},
+  title = {Simultaneous Structure and Texture Image Inpainting},
+  journal = {IEEE T. Image. Process.},
+  year = {2003},
+  volume = {12},
+  number = {8},
+  pages = {882--889},
+  doi = {http://dx.doi.org/10.1109/TIP.2003.815261}
+}
+</pre></td>
+</tr>
+<tr id="Bhattacharya2007" class="entry">
+	<td>Bhattacharya, S., Blumensath, T., Mulgrew, B. &amp; Davies, M.</td>
+	<td>Fast Encoding of Synthetic Aperture Radar Raw Data using Compressed Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Bhattacharya2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proc. IEEE/SP 14th Workshop on Statistical Signal Processing SSP '07, pp. 448-452&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/SSP.2007.4301298">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bhattacharya2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Bhattacharya2007,
+  author = {Bhattacharya, Sujit and Blumensath, Thomas and Mulgrew, Bernard and Davies, Mike},
+  title = {Fast Encoding of Synthetic Aperture Radar Raw Data using Compressed Sensing},
+  booktitle = {Proc. IEEE/SP 14th Workshop on Statistical Signal Processing SSP '07},
+  year = {2007},
+  pages = {448--452},
+  doi = {http://dx.doi.org/10.1109/SSP.2007.4301298}
+}
+</pre></td>
+</tr>
+<tr id="Bishop2006" class="entry">
+	<td>Bishop, C.M.</td>
+	<td>Pattern Recognition and Machine Learning (Information Science and Statistics) <p class="infolinks">[<a href="javascript:toggleInfo('Bishop2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Bishop2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@book{Bishop2006,
+  author = {Bishop, Christopher M.},
+  title = {Pattern Recognition and Machine Learning (Information Science and Statistics)},
+  publisher = {Springer-Verlag New York, Inc.},
+  year = {2006}
+}
+</pre></td>
+</tr>
+<tr id="Blei2010" class="entry">
+	<td>Blei, D.M., Griffiths, T.L. &amp; Jordan, M.I.</td>
+	<td>The Nested Chinese Restaurant Process and Bayesian Nonparametric Inference of Topic Hierarchies <p class="infolinks">[<a href="javascript:toggleInfo('Blei2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>J. ACM<br/>Vol. 57, pp. 7:1-7:30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.acm.org/10.1145/1667053.1667056">DOI</a> <a href="http://doi.acm.org/10.1145/1667053.1667056">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Blei2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Blei2010,
+  author = {Blei, David M. and Griffiths, Thomas L. and Jordan, Michael I.},
+  title = {The Nested Chinese Restaurant Process and Bayesian Nonparametric Inference of Topic Hierarchies},
+  journal = {J. ACM},
+  publisher = {ACM},
+  year = {2010},
+  volume = {57},
+  pages = {7:1--7:30},
+  url = {http://doi.acm.org/10.1145/1667053.1667056},
+  doi = {http://doi.acm.org/10.1145/1667053.1667056}
+}
+</pre></td>
+</tr>
+<tr id="Blei2003" class="entry">
+	<td>Blei, D.M., Ng, A.Y. &amp; Jordan, M.I.</td>
+	<td>Latent Dirichlet Allocation <p class="infolinks">[<a href="javascript:toggleInfo('Blei2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td>J. Mach. Learn. Res.<br/>Vol. 3, pp. 993-1022&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1162/jmlr.2003.3.4-5.993">DOI</a> <a href="http://dx.doi.org/10.1162/jmlr.2003.3.4-5.993">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Blei2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Blei2003,
+  author = {Blei, David M. and Ng, Andrew Y. and Jordan, Michael I.},
+  title = {Latent Dirichlet Allocation},
+  journal = {J. Mach. Learn. Res.},
+  publisher = {JMLR.org},
+  year = {2003},
+  volume = {3},
+  pages = {993--1022},
+  url = {http://dx.doi.org/10.1162/jmlr.2003.3.4-5.993},
+  doi = {http://dx.doi.org/10.1162/jmlr.2003.3.4-5.993}
+}
+</pre></td>
+</tr>
+<tr id="Blumensath2009a" class="entry">
+	<td>Blumensath, T.</td>
+	<td>Sampling and reconstructing signals from a union of linear subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Blumensath2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Arxiv preprint arXiv:0911.3514&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Blumensath2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Blumensath2009a,
+  author = {Blumensath, T.},
+  title = {Sampling and reconstructing signals from a union of linear subspaces},
+  journal = {Arxiv preprint arXiv:0911.3514},
+  year = {2009}
+}
+</pre></td>
+</tr>
+<tr id="Blumensath2009" class="entry">
+	<td>Blumensath, T. &amp; Davies, M.E.</td>
+	<td>Sampling Theorems for Signals From the Union of Finite-Dimensional Linear Subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Blumensath2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 55(4), pp. 1872-1882&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2009.2013003">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Blumensath2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Blumensath2009,
+  author = {Blumensath, T. and Davies, M. E.},
+  title = {Sampling Theorems for Signals From the Union of Finite-Dimensional Linear Subspaces},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2009},
+  volume = {55},
+  number = {4},
+  pages = {1872--1882},
+  doi = {http://dx.doi.org/10.1109/TIT.2009.2013003}
+}
+</pre></td>
+</tr>
+<tr id="Blumensath2007" class="entry">
+	<td>Blumensath, T., Yaghoobi, M. &amp; Davies, M.E.</td>
+	<td>Iterative Hard Thresholding and L0 Regularisation <p class="infolinks">[<a href="javascript:toggleInfo('Blumensath2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td><br/>Vol. 3ICASSP, pp. III-877-III-880&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2007.366820">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Blumensath2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Blumensath2007,
+  author = {Blumensath, T. and Yaghoobi, M. and Davies, M. E.},
+  title = {Iterative Hard Thresholding and L0 Regularisation},
+  booktitle = {ICASSP},
+  year = {2007},
+  volume = {3},
+  pages = {III-877--III-880},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2007.366820}
+}
+</pre></td>
+</tr>
+<tr id="Bobin2008" class="entry">
+	<td>Bobin, J., Starck, J.L. &amp; Ottensamer, R.</td>
+	<td>Compressed Sensing in Astronomy <p class="infolinks">[<a href="javascript:toggleInfo('Bobin2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Journal of Selected Topics in Signal Processing<br/>Vol. 2(5), pp. 718-726&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/JSTSP.2008.2005337">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bobin2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Bobin2008,
+  author = {Bobin, J. and Starck, J. -L. and Ottensamer, R.},
+  title = {Compressed Sensing in Astronomy},
+  journal = {IEEE Journal of Selected Topics in Signal Processing},
+  year = {2008},
+  volume = {2},
+  number = {5},
+  pages = {718--726},
+  doi = {http://dx.doi.org/10.1109/JSTSP.2008.2005337}
+}
+</pre></td>
+</tr>
+<tr id="Boucheron2004" class="entry">
+	<td>Boucheron, S., Bousquet, O. &amp; Lugosi, G.</td>
+	<td>Advanced Lectures in Machine Learning <p class="infolinks">[<a href="javascript:toggleInfo('Boucheron2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Advanced Lectures in Machine Learning, pp. 208-240&nbsp;</td>
+	<td>inbook</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Boucheron2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{Boucheron2004,
+  author = {Boucheron, S. and Bousquet, O. and Lugosi, G.},
+  title = {Advanced Lectures in Machine Learning},
+  booktitle = {Advanced Lectures in Machine Learning},
+  publisher = {Springer},
+  year = {2004},
+  pages = {208-240}
+}
+</pre></td>
+</tr>
+<tr id="Brooks1998" class="entry">
+	<td>Brooks, S. &amp; Gelman, A.</td>
+	<td>General Methods for Monitoring Convergence of Iterative Simulations <p class="infolinks">[<a href="javascript:toggleInfo('Brooks1998','bibtex')">BibTeX</a>]</p></td>
+	<td>1998</td>
+	<td>Journal of Computational and Graphical Statistics<br/>Vol. 7(4), pp. 434-455&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Brooks1998" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Brooks1998,
+  author = {Brooks, S.P. and Gelman, A.},
+  title = {General Methods for Monitoring Convergence of Iterative Simulations},
+  journal = {Journal of Computational and Graphical Statistics},
+  publisher = {JSTOR},
+  year = {1998},
+  volume = {7},
+  number = {4},
+  pages = {434--455}
+}
+</pre></td>
+</tr>
+<tr id="Calderbank2010" class="entry">
+	<td>Calderbank, R., Howard, S. &amp; Jafarpour, S.</td>
+	<td>Construction of a Large Class of Deterministic Sensing Matrices That Satisfy a Statistical Isometry Property <p class="infolinks">[<a href="javascript:toggleInfo('Calderbank2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Calderbank2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE Journal of Selected Topics in Signal Processing<br/>Vol. 4(2), pp. 358 -374&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/JSTSP.2010.2043161">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Calderbank2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Compressed Sensing aims to capture attributes of k-sparse signals using very few measurements. In the standard compressed sensing paradigm, the N ???? C measurement matrix ???? is required to act as a near isometry on the set of all k-sparse signals (restricted isometry property or RIP). Although it is known that certain probabilistic processes generate N ???? C matrices that satisfy RIP with high probability, there is no practical algorithm for verifying whether a given sensing matrix ???? has this property, crucial for the feasibility of the standard recovery algorithms. In contrast, this paper provides simple criteria that guarantee that a deterministic sensing matrix satisfying these criteria acts as a near isometry on an overwhelming majority of k-sparse signals; in particular, most such signals have a unique representation in the measurement domain. Probability still plays a critical role, but it enters the signal model rather than the construction of the sensing matrix. An essential element in our construction is that we require the columns of the sensing matrix to form a group under pointwise multiplication. The construction allows recovery methods for which the expected performance is sub-linear in C, and only quadratic in N, as compared to the super-linear complexity in C of the Basis Pursuit or Matching Pursuit algorithms; the focus on expected performance is more typical of mainstream signal processing than the worst case analysis that prevails in standard compressed sensing. Our framework encompasses many families of deterministic sensing matrices, including those formed from discrete chirps, Delsarte-Goethals codes, and extended BCH codes.</td>
+</tr>
+<tr id="bib_Calderbank2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Calderbank2010,
+  author = {Calderbank, R. and Howard, S. and Jafarpour, S.},
+  title = {Construction of a Large Class of Deterministic Sensing Matrices That Satisfy a Statistical Isometry Property},
+  journal = {IEEE Journal of Selected Topics in Signal Processing},
+  year = {2010},
+  volume = {4},
+  number = {2},
+  pages = {358 -374},
+  doi = {http://dx.doi.org/10.1109/JSTSP.2010.2043161}
+}
+</pre></td>
+</tr>
+<tr id="Candes2008a" class="entry">
+	<td>Cand&eacute;s, E.</td>
+	<td>The restricted isometry property and its implications for compressed sensing <p class="infolinks">[<a href="javascript:toggleInfo('Candes2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Comptes Rendus Mathematique<br/>Vol. 346(9-10), pp. 589-592&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Candes2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2008a,
+  author = {Cand&eacute;s, E.J.},
+  title = {The restricted isometry property and its implications for compressed sensing},
+  journal = {Comptes Rendus Mathematique},
+  publisher = {Elsevier},
+  year = {2008},
+  volume = {346},
+  number = {9-10},
+  pages = {589--592}
+}
+</pre></td>
+</tr>
+<tr id="Candes2006" class="entry">
+	<td>Cand&egrave;s, E., Demanet, L., Donoho, D. &amp; Ying, L.</td>
+	<td>Fast Discrete Curvelet Transforms <p class="infolinks">[<a href="javascript:toggleInfo('Candes2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Multiscale Model. Simul.<br/>Vol. 5(3), pp. 861-899&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Candes2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2006,
+  author = {Cand&egrave;s, E. and Demanet, L. and Donoho, D. and Ying, L.},
+  title = {Fast Discrete Curvelet Transforms},
+  journal = {Multiscale Model. Simul.},
+  year = {2006},
+  volume = {5},
+  number = {3},
+  pages = {861-899}
+}
+</pre></td>
+</tr>
+<tr id="Candes2004" class="entry">
+	<td>Cand&egrave;s, E. &amp; Donoho, D.</td>
+	<td>New Tight Frames of Curvelets and Optimal Representations of Objects with Piecewise $C^2$ Singularities <p class="infolinks">[<a href="javascript:toggleInfo('Candes2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Communications on pure and applied mathematics<br/>Vol. 57(2), pp. 219-266&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Candes2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2004,
+  author = {Cand&egrave;s, E. and Donoho, D.},
+  title = {New Tight Frames of Curvelets and Optimal Representations of Objects with Piecewise $C^2$ Singularities},
+  journal = {Communications on pure and applied mathematics},
+  year = {2004},
+  volume = {57},
+  number = {2},
+  pages = {219-266}
+}
+</pre></td>
+</tr>
+<tr id="Candes2006b" class="entry">
+	<td>Cand&egrave;s, E.J., Romberg, J. &amp; Tao, T.</td>
+	<td>Robust Uncertainty Principles: Exact Signal Reconstruction from Highly Incomplete Frequency Information <p class="infolinks">[<a href="javascript:toggleInfo('Candes2006b','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 52(2), pp. 489-509&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2005.862083">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Candes2006b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2006b,
+  author = {Cand&egrave;s, E. J. and Romberg, J. and Tao, T.},
+  title = {Robust Uncertainty Principles: Exact Signal Reconstruction from Highly Incomplete Frequency Information},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2006},
+  volume = {52},
+  number = {2},
+  pages = {489--509},
+  doi = {http://dx.doi.org/10.1109/TIT.2005.862083}
+}
+</pre></td>
+</tr>
+<tr id="Candes2006a" class="entry">
+	<td>Cand&egrave;s, E.J. &amp; Tao, T.</td>
+	<td>Near-Optimal Signal Recovery From Random Projections: Universal Encoding Strategies? <p class="infolinks">[<a href="javascript:toggleInfo('Candes2006a','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 52(12), pp. 5406-5425&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2006.885507">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Candes2006a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2006a,
+  author = {Cand&egrave;s, E. J. and Tao, T.},
+  title = {Near-Optimal Signal Recovery From Random Projections: Universal Encoding Strategies?},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2006},
+  volume = {52},
+  number = {12},
+  pages = {5406--5425},
+  doi = {http://dx.doi.org/10.1109/TIT.2006.885507}
+}
+</pre></td>
+</tr>
+<tr id="Candes2005" class="entry">
+	<td>Cand&egrave;s, E.J. &amp; Tao, T.</td>
+	<td>Decoding by Linear Programming <p class="infolinks">[<a href="javascript:toggleInfo('Candes2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 51(12), pp. 4203-4215&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2005.858979">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Candes2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2005,
+  author = {Cand&egrave;s, E. J. and Tao, T.},
+  title = {Decoding by Linear Programming},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2005},
+  volume = {51},
+  number = {12},
+  pages = {4203--4215},
+  doi = {http://dx.doi.org/10.1109/TIT.2005.858979}
+}
+</pre></td>
+</tr>
+<tr id="Candes2008" class="entry">
+	<td>Cand&egrave;s, E.J. &amp; Wakin, M.B.</td>
+	<td>An Introduction To Compressive Sampling <p class="infolinks">[<a href="javascript:toggleInfo('Candes2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Signal. Proc. Mag.<br/>Vol. 25(2), pp. 21-30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/MSP.2007.914731">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Candes2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Candes2008,
+  author = {Cand&egrave;s, E. J. and Wakin, M. B.},
+  title = {An Introduction To Compressive Sampling},
+  journal = {IEEE Signal. Proc. Mag.},
+  year = {2008},
+  volume = {25},
+  number = {2},
+  pages = {21--30},
+  doi = {http://dx.doi.org/10.1109/MSP.2007.914731}
+}
+</pre></td>
+</tr>
+<tr id="Candes2002" class="entry">
+	<td>Candès, E. &amp; Demanet, L.</td>
+	<td>Curvelets and Fourier Integral Operators <p class="infolinks">[<a href="javascript:toggleInfo('Candes2002','bibtex')">BibTeX</a>]</p></td>
+	<td>2002</td>
+	<td>&nbsp;</td>
+	<td>misc</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Candes2002" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@misc{Candes2002,
+  author = {Emmanuel Candès and Laurent Demanet},
+  title = {Curvelets and Fourier Integral Operators},
+  year = {2002}
+}
+</pre></td>
+</tr>
+<tr id="Cevher2008" class="entry">
+	<td>Cevher, V., Hegde, C., Duarte, M.F. &amp; Baraniuk, R.G.</td>
+	<td>Sparse Signal Recovery Using Markov Random Fields <p class="infolinks">[<a href="javascript:toggleInfo('Cevher2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>NIPS&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Cevher2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Cevher2008,
+  author = {Volkan Cevher and Chinmay Hegde and Marco F. Duarte and Richard G. Baraniuk},
+  title = {Sparse Signal Recovery Using Markov Random Fields},
+  booktitle = {NIPS},
+  year = {2008}
+}
+</pre></td>
+</tr>
+<tr id="Cevher2010a" class="entry">
+	<td>Cevher, V., Indyk, P., Carin, L. &amp; Baraniuk, R.G.</td>
+	<td>Sparse Signal Recovery and Acquisition with Graphical Models <p class="infolinks">[<a href="javascript:toggleInfo('Cevher2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE Signal. Proc. Mag.<br/>Vol. 27(6), pp. 92-103&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/MSP.2010.938029">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Cevher2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Cevher2010a,
+  author = {Cevher, V. and Indyk, P. and Carin, L. and Baraniuk, R. G.},
+  title = {Sparse Signal Recovery and Acquisition with Graphical Models},
+  journal = {IEEE Signal. Proc. Mag.},
+  year = {2010},
+  volume = {27},
+  number = {6},
+  pages = {92--103},
+  doi = {http://dx.doi.org/10.1109/MSP.2010.938029}
+}
+</pre></td>
+</tr>
+<tr id="Cevher2009" class="entry">
+	<td>Cevher, V., Indyk, P., Hegde, C. &amp; Baraniuk, R.G.</td>
+	<td>Recovery of Clustered Sparse Signals from Compressive Measurements <p class="infolinks">[<a href="javascript:toggleInfo('Cevher2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Int. Conf. on Sampling Theory and Applications (SAMPTA)&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Cevher2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Cevher2009,
+  author = {Volkan Cevher and Piotr Indyk and Chinmay Hegde and Richard G. Baraniuk},
+  title = {Recovery of Clustered Sparse Signals from Compressive Measurements},
+  booktitle = {Int. Conf. on Sampling Theory and Applications (SAMPTA)},
+  year = {2009}
+}
+</pre></td>
+</tr>
+<tr id="Chartrand2008" class="entry">
+	<td>Chartrand, R. &amp; Yin, W.</td>
+	<td>Iteratively Reweighted Algorithms for Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Chartrand2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>ICASSP, pp. 3869-3872&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2008.4518498">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Chartrand2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Chartrand2008,
+  author = {Chartrand, R. and Wotao Yin},
+  title = {Iteratively Reweighted Algorithms for Compressive Sensing},
+  booktitle = {ICASSP},
+  year = {2008},
+  pages = {3869--3872},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2008.4518498}
+}
+</pre></td>
+</tr>
+<tr id="Chen2010a" class="entry">
+	<td>Chen, B., Paisley, J. &amp; Carin, L.</td>
+	<td>Sparse Linear Regression with Beta Process Priors <p class="infolinks">[<a href="javascript:toggleInfo('Chen2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>ICASSP, pp. 1234-1237&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2010.5495400">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Chen2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Chen2010a,
+  author = {Bo Chen and Paisley, J. and Carin, L.},
+  title = {Sparse Linear Regression with Beta Process Priors},
+  booktitle = {ICASSP},
+  year = {2010},
+  pages = {1234--1237},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2010.5495400}
+}
+</pre></td>
+</tr>
+<tr id="Chen2010" class="entry">
+	<td>Chen, M., Silva, J., Paisley, J., Wang, C., Dunson, D. &amp; Carin, L.</td>
+	<td>Compressive Sensing on Manifolds Using a Nonparametric Mixture of Factor Analyzers: Algorithm and Performance Bounds <p class="infolinks">[<a href="javascript:toggleInfo('Chen2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(12), pp. 6140-6155&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2010.2070796">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Chen2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Chen2010,
+  author = {Minhua Chen and Silva, J. and Paisley, J. and Chunping Wang and Dunson, D. and Carin, L.},
+  title = {Compressive Sensing on Manifolds Using a Nonparametric Mixture of Factor Analyzers: Algorithm and Performance Bounds},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2010},
+  volume = {58},
+  number = {12},
+  pages = {6140--6155},
+  doi = {http://dx.doi.org/10.1109/TSP.2010.2070796}
+}
+</pre></td>
+</tr>
+<tr id="Chen1999" class="entry">
+	<td>Chen, S., Donoho, D. &amp; Saunders, M.</td>
+	<td>Atomic Decomposition by Basis Pursuit <p class="infolinks">[<a href="javascript:toggleInfo('Chen1999','bibtex')">BibTeX</a>]</p></td>
+	<td>1998</td>
+	<td>SIAM Journal on Scientific Computing<br/>Vol. 20(1), pp. 33-61&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Chen1999" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Chen1999,
+  author = {Chen, S.S. and Donoho, D.L. and Saunders, M.A.},
+  title = {Atomic Decomposition by Basis Pursuit},
+  journal = {SIAM Journal on Scientific Computing},
+  publisher = {Society for Industrial and Applied Mathematics},
+  year = {1998},
+  volume = {20},
+  number = {1},
+  pages = {33--61}
+}
+</pre></td>
+</tr>
+<tr id="Cohen2009" class="entry">
+	<td>Cohen, A., Dahmen, W. &amp; DeVore, R.</td>
+	<td>Compressed sensing and best k-term approximation <p class="infolinks">[<a href="javascript:toggleInfo('Cohen2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>American Mathematical Society<br/>Vol. 22(1), pp. 211-231&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Cohen2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Cohen2009,
+  author = {Cohen, A. and Dahmen, W. and DeVore, R.},
+  title = {Compressed sensing and best k-term approximation},
+  journal = {American Mathematical Society},
+  year = {2009},
+  volume = {22},
+  number = {1},
+  pages = {211--231}
+}
+</pre></td>
+</tr>
+<tr id="Cotter2005" class="entry">
+	<td>Cotter, S., Rao, B., Engan, K. &amp; Kreutz-Delgado, K.</td>
+	<td>Sparse solutions to linear inverse problems with multiple measurement vectors <p class="infolinks">[<a href="javascript:toggleInfo('Cotter2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 53(7), pp. 2477-2488&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Cotter2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Cotter2005,
+  author = {Cotter, S.F. and Rao, B.D. and Engan, K. and Kreutz-Delgado, K.},
+  title = {Sparse solutions to linear inverse problems with multiple measurement vectors},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2005},
+  volume = {53},
+  number = {7},
+  pages = {2477--2488}
+}
+</pre></td>
+</tr>
+<tr id="Daubechies2004a" class="entry">
+	<td>Daubechies, I.</td>
+	<td>Ten lectures on wavelets <p class="infolinks">[<a href="javascript:toggleInfo('Daubechies2004a','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Daubechies2004a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@book{Daubechies2004a,
+  author = {Daubechies, I.},
+  title = {Ten lectures on wavelets},
+  publisher = {Society for industrial and applied mathematics},
+  year = {2004}
+}
+</pre></td>
+</tr>
+<tr id="Daubechies2004" class="entry">
+	<td>Daubechies, I., Defrise, M. &amp; De Mol, C.</td>
+	<td>An iterative thresholding algorithm for linear inverse problems with a sparsity constraint <p class="infolinks">[<a href="javascript:toggleInfo('Daubechies2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Communications on pure and applied mathematics<br/>Vol. 57(11), pp. 1413-1457&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Daubechies2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Daubechies2004,
+  author = {Daubechies, I. and Defrise, M. and De Mol, C.},
+  title = {An iterative thresholding algorithm for linear inverse problems with a sparsity constraint},
+  journal = {Communications on pure and applied mathematics},
+  publisher = {Wiley Online Library},
+  year = {2004},
+  volume = {57},
+  number = {11},
+  pages = {1413--1457}
+}
+</pre></td>
+</tr>
+<tr id="Daubechies2008" class="entry">
+	<td>Daubechies, I., DeVore, R., Fornasier, M. &amp; Gunturk, S.</td>
+	<td>Iteratively Re-weighted Least Squares minimization: Proof of faster than linear rate for sparse recovery <p class="infolinks">[<a href="javascript:toggleInfo('Daubechies2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proc. 42nd Annual Conf. Information Sciences and Systems CISS 2008, pp. 26-29&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/CISS.2008.4558489">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Daubechies2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Daubechies2008,
+  author = {Daubechies, I. and DeVore, R. and Fornasier, M. and Gunturk, S.},
+  title = {Iteratively Re-weighted Least Squares minimization: Proof of faster than linear rate for sparse recovery},
+  booktitle = {Proc. 42nd Annual Conf. Information Sciences and Systems CISS 2008},
+  year = {2008},
+  pages = {26--29},
+  doi = {http://dx.doi.org/10.1109/CISS.2008.4558489}
+}
+</pre></td>
+</tr>
+<tr id="Davies2008" class="entry">
+	<td>Davies, M.E. &amp; Blumensath, T.</td>
+	<td>Faster &amp; Greedier: Algorithms for Sparse Reconstruction of Large Datasets <p class="infolinks">[<a href="javascript:toggleInfo('Davies2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proc. 3rd International Symposium on Communications, Control and Signal Processing ISCCSP 2008, pp. 774-779&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ISCCSP.2008.4537327">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Davies2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Davies2008,
+  author = {Davies, M. E. and Blumensath, T. },
+  title = {Faster &amp; Greedier: Algorithms for Sparse Reconstruction of Large Datasets},
+  booktitle = {Proc. 3rd International Symposium on Communications, Control and Signal Processing ISCCSP 2008},
+  year = {2008},
+  pages = {774--779},
+  doi = {http://dx.doi.org/10.1109/ISCCSP.2008.4537327}
+}
+</pre></td>
+</tr>
+<tr id="Devore2007a" class="entry">
+	<td>DeVore, R.</td>
+	<td>Deterministic constructions of compressed sensing matrices <p class="infolinks">[<a href="javascript:toggleInfo('Devore2007a','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Journal of Complexity<br/>Vol. 23(4-6), pp. 918-925&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Devore2007a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Devore2007a,
+  author = {DeVore, R.A.},
+  title = {Deterministic constructions of compressed sensing matrices},
+  journal = {Journal of Complexity},
+  publisher = {Elsevier},
+  year = {2007},
+  volume = {23},
+  number = {4-6},
+  pages = {918--925}
+}
+</pre></td>
+</tr>
+<tr id="Djbkovic1997" class="entry">
+	<td>Djbkovic, I. &amp; Vaidyanathan, P.</td>
+	<td>Generalized sampling theorems in multiresolution subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Djbkovic1997','bibtex')">BibTeX</a>]</p></td>
+	<td>1997</td>
+	<td>Signal Processing, IEEE Transactions on<br/>Vol. 45(3), pp. 583-599&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Djbkovic1997" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Djbkovic1997,
+  author = {Djbkovic, I. and Vaidyanathan, PP},
+  title = {Generalized sampling theorems in multiresolution subspaces},
+  journal = {Signal Processing, IEEE Transactions on},
+  publisher = {IEEE},
+  year = {1997},
+  volume = {45},
+  number = {3},
+  pages = {583--599}
+}
+</pre></td>
+</tr>
+<tr id="Do2003" class="entry">
+	<td>Do, M.</td>
+	<td>Contourlets and sparse image expansions <p class="infolinks">[<a href="javascript:toggleInfo('Do2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><br/>Vol. 5207Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series, pp. 560-570&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Do2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Do2003,
+  author = {Do, M.N.},
+  title = {Contourlets and sparse image expansions},
+  booktitle = {Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series},
+  year = {2003},
+  volume = {5207},
+  pages = {560--570}
+}
+</pre></td>
+</tr>
+<tr id="Dobigeon2010" class="entry">
+	<td>Dobigeon, N. &amp; Tourneret, J.</td>
+	<td>Bayesian Orthogonal Component Analysis for Sparse Representation <p class="infolinks">[<a href="javascript:toggleInfo('Dobigeon2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(5), pp. 2675-2685&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Dobigeon2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Dobigeon2010,
+  author = {Dobigeon, N. and Tourneret, J.Y.},
+  title = {Bayesian Orthogonal Component Analysis for Sparse Representation},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2010},
+  volume = {58},
+  number = {5},
+  pages = {2675--2685}
+}
+</pre></td>
+</tr>
+<tr id="Sparselab" class="entry">
+	<td>Donoho, D., Drori, I., Stodden, V., Tsaig, Y. &amp; Shahram, M.</td>
+	<td>SparseLab <p class="infolinks">[<a href="javascript:toggleInfo('Sparselab','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>http://sparselab.stanford.edu/&nbsp;</td>
+	<td>misc</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Sparselab" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@misc{Sparselab,
+  author = {Donoho, David and Drori, Iddo and Stodden, Victoria and Tsaig, Yaakov and Shahram, Morteza},
+  title = {SparseLab}
+}
+</pre></td>
+</tr>
+<tr id="Donoho2006a" class="entry">
+	<td>Donoho, D.L.</td>
+	<td>Compressed Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Donoho2006a','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 52(4), pp. 1289-1306&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2006.871582">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Donoho2006a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Donoho2006a,
+  author = {Donoho, D. L.},
+  title = {Compressed Sensing},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2006},
+  volume = {52},
+  number = {4},
+  pages = {1289--1306},
+  doi = {http://dx.doi.org/10.1109/TIT.2006.871582}
+}
+</pre></td>
+</tr>
+<tr id="Donoho2010a" class="entry">
+	<td>Donoho, D.L., Maleki, A. &amp; Montanari, A.</td>
+	<td>Message Passing Algorithms for Compressed Sensing: I. Motivation and Construction <p class="infolinks">[<a href="javascript:toggleInfo('Donoho2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Proc. IEEE Information Theory Workshop (ITW), pp. 1-5&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ITWKSPS.2010.5503193">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Donoho2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Donoho2010a,
+  author = {Donoho, D. L. and Maleki, A. and Montanari, A.},
+  title = {Message Passing Algorithms for Compressed Sensing: I. Motivation and Construction},
+  booktitle = {Proc. IEEE Information Theory Workshop (ITW)},
+  year = {2010},
+  pages = {1--5},
+  doi = {http://dx.doi.org/10.1109/ITWKSPS.2010.5503193}
+}
+</pre></td>
+</tr>
+<tr id="Donoho2010b" class="entry">
+	<td>Donoho, D.L. &amp; Tanner, J.</td>
+	<td>Precise Undersampling Theorems <p class="infolinks">[<a href="javascript:toggleInfo('Donoho2010b','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Proceedings of the IEEE<br/>Vol. 98(6), pp. 913-924&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/JPROC.2010.2045630">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Donoho2010b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Donoho2010b,
+  author = {Donoho, D. L. and Tanner, J.},
+  title = {Precise Undersampling Theorems},
+  journal = {Proceedings of the IEEE},
+  year = {2010},
+  volume = {98},
+  number = {6},
+  pages = {913--924},
+  doi = {http://dx.doi.org/10.1109/JPROC.2010.2045630}
+}
+</pre></td>
+</tr>
+<tr id="Doucet1997" class="entry">
+	<td>Doucet, A. &amp; Duvaut, P.</td>
+	<td>Bayesian Estimation of State-space Models Applied to Deconvolution of Bernoulli-Gaussian Processes <p class="infolinks">[<a href="javascript:toggleInfo('Doucet1997','bibtex')">BibTeX</a>]</p></td>
+	<td>1997</td>
+	<td>Signal Processing<br/>Vol. 57(2), pp. 147-161&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Doucet1997" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Doucet1997,
+  author = {Doucet, A. and Duvaut, P.},
+  title = {Bayesian Estimation of State-space Models Applied to Deconvolution of Bernoulli-Gaussian Processes},
+  journal = {Signal Processing},
+  publisher = {Elsevier},
+  year = {1997},
+  volume = {57},
+  number = {2},
+  pages = {147--161}
+}
+</pre></td>
+</tr>
+<tr id="Duarte2009" class="entry">
+	<td>Duarte, M.F., Cevher, V. &amp; Baraniuk, R.G.</td>
+	<td>Model-based Compressive Sensing for Signal Ensembles <p class="infolinks">[<a href="javascript:toggleInfo('Duarte2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proc. 47th Annual Allerton Conf. Communication, Control, and Computing Allerton 2009, pp. 244-250&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ALLERTON.2009.5394807">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Duarte2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duarte2009,
+  author = {Duarte, M. F. and Cevher, V. and Baraniuk, R. G. },
+  title = {Model-based Compressive Sensing for Signal Ensembles},
+  booktitle = {Proc. 47th Annual Allerton Conf. Communication, Control, and Computing Allerton 2009},
+  year = {2009},
+  pages = {244--250},
+  doi = {http://dx.doi.org/10.1109/ALLERTON.2009.5394807}
+}
+</pre></td>
+</tr>
+<tr id="Duarte2008" class="entry">
+	<td>Duarte, M.F., Davenport, M.A., Takhar, D., Laska, J.N., Sun, T., Kelly, K.F. &amp; Baraniuk, R.G.</td>
+	<td>Single-Pixel Imaging via Compressive Sampling <p class="infolinks">[<a href="javascript:toggleInfo('Duarte2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Signal. Proc. Mag.<br/>Vol. 25(2), pp. 83-91&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/MSP.2007.914730">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Duarte2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Duarte2008,
+  author = {Duarte, M. F. and Davenport, M. A. and Takhar, D. and Laska, J. N. and Ting Sun and Kelly, K. F. and Baraniuk, R. G.},
+  title = {Single-Pixel Imaging via Compressive Sampling},
+  journal = {IEEE Signal. Proc. Mag.},
+  year = {2008},
+  volume = {25},
+  number = {2},
+  pages = {83--91},
+  doi = {http://dx.doi.org/10.1109/MSP.2007.914730}
+}
+</pre></td>
+</tr>
+<tr id="Duarte2009a" class="entry">
+	<td>Duarte, M.F., Hegde, C., Cevher, V. &amp; Baraniuk, R.G.</td>
+	<td>Recovery of Compressible Signals in Unions of Subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Duarte2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proc. 43rd Annual Conf. Information Sciences and Systems CISS 2009, pp. 175-180&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/CISS.2009.5054712">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Duarte2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duarte2009a,
+  author = {Duarte, M. F. and Hegde, C. and Cevher, V. and Baraniuk, R. G. },
+  title = {Recovery of Compressible Signals in Unions of Subspaces},
+  booktitle = {Proc. 43rd Annual Conf. Information Sciences and Systems CISS 2009},
+  year = {2009},
+  pages = {175--180},
+  doi = {http://dx.doi.org/10.1109/CISS.2009.5054712}
+}
+</pre></td>
+</tr>
+<tr id="Duarte2008a" class="entry">
+	<td>Duarte, M.F., Wakin, M.B. &amp; Baraniuk, R.G.</td>
+	<td>Wavelet-domain Compressive Signal Reconstruction using a Hidden Markov Tree Model <p class="infolinks">[<a href="javascript:toggleInfo('Duarte2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>ICASSP, pp. 5137-5140&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2008.4518815">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Duarte2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duarte2008a,
+  author = {Duarte, M. F. and Wakin, M. B. and Baraniuk, R. G.},
+  title = {Wavelet-domain Compressive Signal Reconstruction using a Hidden Markov Tree Model},
+  booktitle = {ICASSP},
+  year = {2008},
+  pages = {5137--5140},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2008.4518815}
+}
+</pre></td>
+</tr>
+<tr id="Elad2005" class="entry">
+	<td>Elad, M., Starck, J.-L., Querre, P. &amp; Donoho, D.</td>
+	<td>Simultaneous Cartoon and Texture Image Inpainting using Morphological Component Analysis (MCA) <p class="infolinks">[<a href="javascript:toggleInfo('Elad2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>Applied and Computational Harmonic Analysis<br/>Vol. 19(3), pp. 340 - 358&nbsp;</td>
+	<td>article</td>
+	<td><a href="DOI: 10.1016/j.acha.2005.03.005">DOI</a> <a href="http://www.sciencedirect.com/science/article/B6WB3-4GWC29F-2/2/61d7afc314d50b27968d84ff4a16acce">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Elad2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Elad2005,
+  author = {M. Elad and J.-L. Starck and P. Querre and D.L. Donoho},
+  title = {Simultaneous Cartoon and Texture Image Inpainting using Morphological Component Analysis (MCA)},
+  journal = {Applied and Computational Harmonic Analysis},
+  year = {2005},
+  volume = {19},
+  number = {3},
+  pages = {340 - 358},
+  note = {Computational Harmonic Analysis - Part 1},
+  url = {http://www.sciencedirect.com/science/article/B6WB3-4GWC29F-2/2/61d7afc314d50b27968d84ff4a16acce},
+  doi = {DOI: 10.1016/j.acha.2005.03.005}
+}
+</pre></td>
+</tr>
+<tr id="Eldar2009" class="entry">
+	<td>Eldar, Y.C. &amp; Bolcskei, H.</td>
+	<td>Block-sparsity: Coherence and Efficient Recovery <p class="infolinks">[<a href="javascript:toggleInfo('Eldar2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>ICASSP, pp. 2885-2888&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ICASSP.2009.4960226">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Eldar2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Eldar2009,
+  author = {Eldar, Y. C. and Bolcskei, H. },
+  title = {Block-sparsity: Coherence and Efficient Recovery},
+  booktitle = {ICASSP},
+  year = {2009},
+  pages = {2885--2888},
+  doi = {http://dx.doi.org/10.1109/ICASSP.2009.4960226}
+}
+</pre></td>
+</tr>
+<tr id="Eldar2010" class="entry">
+	<td>Eldar, Y.C., Kuppinger, P. &amp; Bolcskei, H.</td>
+	<td>Block-Sparse Signals: Uncertainty Relations and Efficient Recovery <p class="infolinks">[<a href="javascript:toggleInfo('Eldar2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(6), pp. 3042-3054&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2010.2044837">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Eldar2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Eldar2010,
+  author = {Eldar, Y. C. and Kuppinger, P. and Bolcskei, H.},
+  title = {Block-Sparse Signals: Uncertainty Relations and Efficient Recovery},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2010},
+  volume = {58},
+  number = {6},
+  pages = {3042--3054},
+  doi = {http://dx.doi.org/10.1109/TSP.2010.2044837}
+}
+</pre></td>
+</tr>
+<tr id="Eldar2009a" class="entry">
+	<td>Eldar, Y.C. &amp; Mishali, M.</td>
+	<td>Robust Recovery of Signals From a Structured Union of Subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Eldar2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 55(11), pp. 5302-5316&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2009.2030471">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Eldar2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Eldar2009a,
+  author = {Eldar, Y. C. and Mishali, M.},
+  title = {Robust Recovery of Signals From a Structured Union of Subspaces},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2009},
+  volume = {55},
+  number = {11},
+  pages = {5302--5316},
+  doi = {http://dx.doi.org/10.1109/TIT.2009.2030471}
+}
+</pre></td>
+</tr>
+<tr id="Farage2008" class="entry">
+	<td>Farage, G., Foucher, S., Lopez-Martinez, C. &amp; Benie, G.B.</td>
+	<td>Turbo Speckle Filtering applied to PolSAR Data <p class="infolinks">[<a href="javascript:toggleInfo('Farage2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td><br/>Vol. 4IGARSS, pp. IV-25-IV-28&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/IGARSS.2008.4779647">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Farage2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Farage2008,
+  author = {Farage, G. and Foucher, S. and Lopez-Martinez, C. and Benie, G. B.},
+  title = {Turbo Speckle Filtering applied to PolSAR Data},
+  booktitle = {IGARSS},
+  year = {2008},
+  volume = {4},
+  pages = {IV--25--IV--28},
+  doi = {http://dx.doi.org/10.1109/IGARSS.2008.4779647}
+}
+</pre></td>
+</tr>
+<tr id="Fevotte2006" class="entry">
+	<td>Fevotte, C. &amp; Godsill, S.</td>
+	<td>A Bayesian Approach for Blind Separation of Sparse Sources <p class="infolinks">[<a href="javascript:toggleInfo('Fevotte2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE Transactions on Audio, Speech, and Language Processing<br/>Vol. 14(6), pp. 2174-2188&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Fevotte2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Fevotte2006,
+  author = {Fevotte, C. and Godsill, S.J.},
+  title = {A Bayesian Approach for Blind Separation of Sparse Sources},
+  journal = {IEEE Transactions on Audio, Speech, and Language Processing},
+  publisher = {IEEE},
+  year = {2006},
+  volume = {14},
+  number = {6},
+  pages = {2174--2188}
+}
+</pre></td>
+</tr>
+<tr id="Foucart2009" class="entry">
+	<td>Foucart, S. &amp; Lai, M.-J.</td>
+	<td>Sparsest Solutions of Underdetermined Linear Systems via lq-minimization for $0<qleq 1$ <p class="infolinks">[<a href="javascript:toggleInfo('Foucart2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Applied and Computational Harmonic Analysis<br/>Vol. 26(3), pp. 395 - 407&nbsp;</td>
+	<td>article</td>
+	<td><a href="DOI: 10.1016/j.acha.2008.09.001">DOI</a> <a href="http://www.sciencedirect.com/science/article/B6WB3-4THSX8B-1/2/ce4e6ba69938e449901b7da75367e97f">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Foucart2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Foucart2009,
+  author = {Simon Foucart and Ming-Jun Lai},
+  title = {Sparsest Solutions of Underdetermined Linear Systems via lq-minimization for $0<qleq 1$},
+  journal = {Applied and Computational Harmonic Analysis},
+  year = {2009},
+  volume = {26},
+  number = {3},
+  pages = {395 - 407},
+  url = {http://www.sciencedirect.com/science/article/B6WB3-4THSX8B-1/2/ce4e6ba69938e449901b7da75367e97f},
+  doi = {DOI: 10.1016/j.acha.2008.09.001}
+}
+</pre></td>
+</tr>
+<tr id="Fu2006" class="entry">
+	<td>Fu, H., Ng, M.K., Nikolova, M. &amp; Barlow, J.L.</td>
+	<td>Efficient Minimization Methods of Mixed l2-l1 and l1-l1 Norms for Image Restoration <p class="infolinks">[<a href="javascript:toggleInfo('Fu2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>SIAM Journal on Scientific Computing<br/>Vol. 27(6), pp. 1881-1902&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1137/040615079">DOI</a> <a href="http://link.aip.org/link/?SCE/27/1881/1">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Fu2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Fu2006,
+  author = {Haoying Fu and Michael K. Ng and Mila Nikolova and Jesse L. Barlow},
+  title = {Efficient Minimization Methods of Mixed l2-l1 and l1-l1 Norms for Image Restoration},
+  journal = {SIAM Journal on Scientific Computing},
+  publisher = {SIAM},
+  year = {2006},
+  volume = {27},
+  number = {6},
+  pages = {1881-1902},
+  url = {http://link.aip.org/link/?SCE/27/1881/1},
+  doi = {http://dx.doi.org/10.1137/040615079}
+}
+</pre></td>
+</tr>
+<tr id="Fevotte2008" class="entry">
+	<td>F&eacute;votte, C., Torr&eacute;sani, B., Daudet, L. &amp; Godsill, S.</td>
+	<td>Sparse Linear Regression with Structured Priors and Application to Denoising of Musical Audio <p class="infolinks">[<a href="javascript:toggleInfo('Fevotte2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Transactions on Audio, Speech, and Language Processing<br/>Vol. 16(1), pp. 174-185&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TASL.2007.909290">DOI</a> <a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4374123&tag=1">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Fevotte2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Fevotte2008,
+  author = {F&eacute;votte, C. and Torr&eacute;sani, B. and Daudet, L. and Godsill, S.J.},
+  title = {Sparse Linear Regression with Structured Priors and Application to Denoising of Musical Audio},
+  journal = {IEEE Transactions on Audio, Speech, and Language Processing},
+  publisher = {IEEE},
+  year = {2008},
+  volume = {16},
+  number = {1},
+  pages = {174--185},
+  url = {http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4374123&amp;tag=1},
+  doi = {http://dx.doi.org/10.1109/TASL.2007.909290}
+}
+</pre></td>
+</tr>
+<tr id="Gabriel2009" class="entry">
+	<td>Gabriel, R., Davies, M. &amp; Mulgrew, B.</td>
+	<td>Compressed Sensing based Compression of SAR Raw Data <p class="infolinks">[<a href="javascript:toggleInfo('Gabriel2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>SPARS'09 - Signal Processing with Adaptive Sparse Structured Representations (2009)&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Gabriel2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Gabriel2009,
+  author = {Gabriel, Rilling and Davies, Mike and Mulgrew, Bernard},
+  title = {Compressed Sensing based Compression of SAR Raw Data},
+  booktitle = {SPARS'09 - Signal Processing with Adaptive Sparse Structured Representations (2009)},
+  year = {2009}
+}
+</pre></td>
+</tr>
+<tr id="Gelman1992" class="entry">
+	<td>Gelman, A. &amp; Rubin, D.</td>
+	<td>Inference from Iterative Simulation using Multiple Sequences <p class="infolinks">[<a href="javascript:toggleInfo('Gelman1992','bibtex')">BibTeX</a>]</p></td>
+	<td>1992</td>
+	<td>Statistical science<br/>Vol. 7(4), pp. 457-472&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Gelman1992" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Gelman1992,
+  author = {Gelman, A. and Rubin, D.B.},
+  title = {Inference from Iterative Simulation using Multiple Sequences},
+  journal = {Statistical science},
+  publisher = {JSTOR},
+  year = {1992},
+  volume = {7},
+  number = {4},
+  pages = {457--472}
+}
+</pre></td>
+</tr>
+<tr id="Gorodnitsky1997" class="entry">
+	<td>Gorodnitsky, I.F. &amp; Rao, B.D.</td>
+	<td>Sparse Signal Reconstruction from Limited Data using FOCUSS: a Re-weighted Minimum Norm Algorithm <p class="infolinks">[<a href="javascript:toggleInfo('Gorodnitsky1997','bibtex')">BibTeX</a>]</p></td>
+	<td>1997</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 45(3), pp. 600-616&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/78.558475">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Gorodnitsky1997" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Gorodnitsky1997,
+  author = {Gorodnitsky, I. F. and Rao, B. D.},
+  title = {Sparse Signal Reconstruction from Limited Data using FOCUSS: a Re-weighted Minimum Norm Algorithm},
+  journal = {IEEE T. Signal. Proces.},
+  year = {1997},
+  volume = {45},
+  number = {3},
+  pages = {600--616},
+  doi = {http://dx.doi.org/10.1109/78.558475}
+}
+</pre></td>
+</tr>
+<tr id="Haupt2009" class="entry">
+	<td>Haupt, J., Bajwa, W., Raz, G. &amp; Nowak, R.</td>
+	<td>Toeplitz compressed sensing matrices with applications to sparse channel estimation <p class="infolinks">[<a href="javascript:toggleInfo('Haupt2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Information Theory, IEEE Transactions on<br/>Vol. 56(11), pp. 5862-5875&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Haupt2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Haupt2009,
+  author = {Haupt, J. and Bajwa, W.U. and Raz, G. and Nowak, R.},
+  title = {Toeplitz compressed sensing matrices with applications to sparse channel estimation},
+  journal = {Information Theory, IEEE Transactions on},
+  publisher = {IEEE},
+  year = {2010},
+  volume = {56},
+  number = {11},
+  pages = {5862--5875}
+}
+</pre></td>
+</tr>
+<tr id="He2009" class="entry">
+	<td>He, L. &amp; Carin, L.</td>
+	<td>Exploiting Structure in Wavelet-Based Bayesian Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('He2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 57(9), pp. 3488-3497&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2009.2022003">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_He2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{He2009,
+  author = {He, L. and Carin, L.},
+  title = {Exploiting Structure in Wavelet-Based Bayesian Compressive Sensing},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2009},
+  volume = {57},
+  number = {9},
+  pages = {3488--3497},
+  doi = {http://dx.doi.org/10.1109/TSP.2009.2022003}
+}
+</pre></td>
+</tr>
+<tr id="He2010" class="entry">
+	<td>He, L., Chen, H. &amp; Carin, L.</td>
+	<td>Tree-Structured Compressive Sensing With Variational Bayesian Analysis <p class="infolinks">[<a href="javascript:toggleInfo('He2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE Signal. Proc. Let.<br/>Vol. 17(3), pp. 233-236&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/LSP.2009.2037532">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_He2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{He2010,
+  author = {Lihan He and Haojun Chen and Carin, L.},
+  title = {Tree-Structured Compressive Sensing With Variational Bayesian Analysis},
+  journal = {IEEE Signal. Proc. Let.},
+  year = {2010},
+  volume = {17},
+  number = {3},
+  pages = {233--236},
+  doi = {http://dx.doi.org/10.1109/LSP.2009.2037532}
+}
+</pre></td>
+</tr>
+<tr id="Hjort1990" class="entry">
+	<td>Hjort, N.L.</td>
+	<td>Nonparametric Bayes estimators based on Beta processes in models for life history data <p class="infolinks">[<a href="javascript:toggleInfo('Hjort1990','bibtex')">BibTeX</a>]</p></td>
+	<td>1990</td>
+	<td>The Annals of Statistics<br/>Vol. 18(3), pp. 1259–1294&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Hjort1990" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Hjort1990,
+  author = {Hjort, N. L.},
+  title = {Nonparametric Bayes estimators based on Beta processes in models for life history data},
+  journal = {The Annals of Statistics},
+  year = {1990},
+  volume = {18},
+  number = {3},
+  pages = {1259–1294}
+}
+</pre></td>
+</tr>
+<tr id="Howard2008" class="entry">
+	<td>Howard, S., Calderbank, A. &amp; Searle, S.</td>
+	<td>A fast reconstruction algorithm for deterministic compressive sensing using second order Reed-Muller codes <p class="infolinks">[<a href="javascript:toggleInfo('Howard2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Information Sciences and Systems, 2008. CISS 2008. 42nd Annual Conference on, pp. 11-15&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Howard2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Howard2008,
+  author = {Howard, S.D. and Calderbank, A.R. and Searle, S.J.},
+  title = {A fast reconstruction algorithm for deterministic compressive sensing using second order Reed-Muller codes},
+  booktitle = {Information Sciences and Systems, 2008. CISS 2008. 42nd Annual Conference on},
+  year = {2008},
+  pages = {11--15}
+}
+</pre></td>
+</tr>
+<tr id="Huang2010" class="entry">
+	<td>Huang, J. &amp; Zhang, T.</td>
+	<td>The Benefit of Group Sparsity <p class="infolinks">[<a href="javascript:toggleInfo('Huang2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Annals of Statistics<br/>Vol. 38(4), pp. 1978-2004&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Huang2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Huang2010,
+  author = {Huang, Junzhou and Zhang, Tong},
+  title = {The Benefit of Group Sparsity},
+  journal = {Annals of Statistics},
+  year = {2010},
+  volume = {38},
+  number = {4},
+  pages = {1978-2004}
+}
+</pre></td>
+</tr>
+<tr id="Huang2009" class="entry">
+	<td>Huang, J., Zhang, T. &amp; Metaxas, D.</td>
+	<td>Learning with Structured Sparsity <p class="infolinks">[<a href="javascript:toggleInfo('Huang2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>ICML&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Huang2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Huang2009,
+  author = {Huang, Junzhou and Zhang, Tong and Metaxas, Dimitris},
+  title = {Learning with Structured Sparsity},
+  booktitle = {ICML},
+  year = {2009}
+}
+</pre></td>
+</tr>
+<tr id="Huang2007" class="entry">
+	<td>Huang, K. &amp; Aviyent, S.</td>
+	<td>Sparse Representation for Signal Classification <p class="infolinks">[<a href="javascript:toggleInfo('Huang2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>NIPS, pp. 609-616&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Huang2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Huang2007,
+  author = {Huang, K. and Aviyent, S.},
+  title = {Sparse Representation for Signal Classification},
+  booktitle = {NIPS},
+  year = {2007},
+  pages = {609-616}
+}
+</pre></td>
+</tr>
+<tr id="Idier1990" class="entry">
+	<td>Idier, J. &amp; Goussard, Y.</td>
+	<td>Stack Algorithm for Recursive Deconvolution of Bernoulli-Gaussian Processes [seismic exploration] <p class="infolinks">[<a href="javascript:toggleInfo('Idier1990','bibtex')">BibTeX</a>]</p></td>
+	<td>1990</td>
+	<td>IEEE T. Geosci. Remote.<br/>Vol. 28(5), pp. 975-978&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Idier1990" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Idier1990,
+  author = {Idier, J. and Goussard, Y.},
+  title = {Stack Algorithm for Recursive Deconvolution of Bernoulli-Gaussian Processes [seismic exploration]},
+  journal = {IEEE T. Geosci. Remote.},
+  publisher = {IEEE},
+  year = {1990},
+  volume = {28},
+  number = {5},
+  pages = {975--978}
+}
+</pre></td>
+</tr>
+<tr id="Indyk2008" class="entry">
+	<td>Indyk, P.</td>
+	<td>Sparse Recovery Using Sparse (Random) Matrices <p class="infolinks">[<a href="javascript:toggleInfo('Indyk2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>LATIN 2010: Theoretical Informatics: 9th Latin American Symposium, Oaxaca, Mexico, April 19-23, 2010, Proceedings, pp. 157&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Indyk2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Indyk2008,
+  author = {Indyk, P.},
+  title = {Sparse Recovery Using Sparse (Random) Matrices},
+  booktitle = {LATIN 2010: Theoretical Informatics: 9th Latin American Symposium, Oaxaca, Mexico, April 19-23, 2010, Proceedings},
+  year = {2010},
+  pages = {157}
+}
+</pre></td>
+</tr>
+<tr id="Jacques2010" class="entry">
+	<td>Jacques, L.</td>
+	<td>A Short Note on Compressed Sensing with Partially Known Signal Support <p class="infolinks">[<a href="javascript:toggleInfo('Jacques2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Signal Processing<br/>Vol. 90(12), pp. 3308 - 3312&nbsp;</td>
+	<td>article</td>
+	<td><a href="DOI: 10.1016/j.sigpro.2010.05.025">DOI</a> <a href="http://www.sciencedirect.com/science/article/B6V18-506RH5M-1/2/c3f7e8da21cf25e10a2b40b922501d0b">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Jacques2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Jacques2010,
+  author = {Laurent Jacques},
+  title = {A Short Note on Compressed Sensing with Partially Known Signal Support},
+  journal = {Signal Processing},
+  year = {2010},
+  volume = {90},
+  number = {12},
+  pages = {3308 - 3312},
+  url = {http://www.sciencedirect.com/science/article/B6V18-506RH5M-1/2/c3f7e8da21cf25e10a2b40b922501d0b},
+  doi = {DOI: 10.1016/j.sigpro.2010.05.025}
+}
+</pre></td>
+</tr>
+<tr id="Jerri1977" class="entry">
+	<td>Jerri, A.</td>
+	<td>The Shannon sampling theorem—Its various extensions and applications: A tutorial review <p class="infolinks">[<a href="javascript:toggleInfo('Jerri1977','bibtex')">BibTeX</a>]</p></td>
+	<td>1977</td>
+	<td>Proceedings of the IEEE<br/>Vol. 65(11), pp. 1565-1596&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Jerri1977" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Jerri1977,
+  author = {Jerri, A.J.},
+  title = {The Shannon sampling theorem—Its various extensions and applications: A tutorial review},
+  journal = {Proceedings of the IEEE},
+  publisher = {IEEE},
+  year = {1977},
+  volume = {65},
+  number = {11},
+  pages = {1565--1596}
+}
+</pre></td>
+</tr>
+<tr id="Ji2009" class="entry">
+	<td>Ji, S., Dunson, D. &amp; Carin, L.</td>
+	<td>Multitask Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Ji2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 57(1), pp. 92-106&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2008.2005866">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Ji2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ji2009,
+  author = {Ji, S. and Dunson, D. and Carin, L.},
+  title = {Multitask Compressive Sensing},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2009},
+  volume = {57},
+  number = {1},
+  pages = {92--106},
+  doi = {http://dx.doi.org/10.1109/TSP.2008.2005866}
+}
+</pre></td>
+</tr>
+<tr id="Ji2008" class="entry">
+	<td>Ji, S., Ya, X. &amp; Carin, L.</td>
+	<td>Bayesian Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Ji2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 56(6), pp. 2346-2356&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2007.914345">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Ji2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ji2008,
+  author = {Ji, S. and Ya, X. and Carin, L.},
+  title = {Bayesian Compressive Sensing},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2008},
+  volume = {56},
+  number = {6},
+  pages = {2346--2356},
+  doi = {http://dx.doi.org/10.1109/TSP.2007.914345}
+}
+</pre></td>
+</tr>
+<tr id="Johnson1984" class="entry">
+	<td>Johnson, W. &amp; Lindenstrauss, J.</td>
+	<td>Extensions of Lipschitz maps into a Hilbert space <p class="infolinks">[<a href="javascript:toggleInfo('Johnson1984','bibtex')">BibTeX</a>]</p></td>
+	<td>1984</td>
+	<td>Contemporary Mathematics<br/>Vol. 26, pp. 189-206&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Johnson1984" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Johnson1984,
+  author = {Johnson, W. and Lindenstrauss, J.},
+  title = {Extensions of Lipschitz maps into a Hilbert space},
+  journal = {Contemporary Mathematics},
+  year = {1984},
+  volume = {26},
+  pages = {189-206}
+}
+</pre></td>
+</tr>
+<tr id="Kormylo1982" class="entry">
+	<td>Kormylo, J. &amp; Mendel, J.</td>
+	<td>Maximum Likelihood Detection and Estimation of Bernoulli-Gaussian Processes <p class="infolinks">[<a href="javascript:toggleInfo('Kormylo1982','bibtex')">BibTeX</a>]</p></td>
+	<td>1982</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 28(3), pp. 482-488&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Kormylo1982" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Kormylo1982,
+  author = {Kormylo, J. and Mendel, J.},
+  title = {Maximum Likelihood Detection and Estimation of Bernoulli-Gaussian Processes},
+  journal = {IEEE T. Inform. Theory.},
+  publisher = {IEEE},
+  year = {1982},
+  volume = {28},
+  number = {3},
+  pages = {482--488}
+}
+</pre></td>
+</tr>
+<tr id="Pennec2005" class="entry">
+	<td>Le Pennec E., M.S.</td>
+	<td>Sparse Geometric Image Representations with Bandelets <p class="infolinks">[<a href="javascript:toggleInfo('Pennec2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>IEEE T. Image. Process.<br/>Vol. 14(4), pp. 423-438&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Pennec2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Pennec2005,
+  author = {Le Pennec E., Mallat S.},
+  title = {Sparse Geometric Image Representations with Bandelets},
+  journal = {IEEE T. Image. Process.},
+  year = {2005},
+  volume = {14},
+  number = {4},
+  pages = {423-438}
+}
+</pre></td>
+</tr>
+<tr id="Li2008" class="entry">
+	<td>Li, L., Zhang, W., Xiang, Y. &amp; Li, F.</td>
+	<td>The Design of Compressive Sensing Filter <p class="infolinks">[<a href="javascript:toggleInfo('Li2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>arXiv:0811.2637v1&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Li2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Li2008,
+  author = {Li, Lianlin and Zhang, Wenji and Xiang, Yin and Li, Fang},
+  title = {The Design of Compressive Sensing Filter},
+  journal = {arXiv:0811.2637v1},
+  year = {2008}
+}
+</pre></td>
+</tr>
+<tr id="Lu2008" class="entry">
+	<td>Lu, Y. &amp; Do, M.</td>
+	<td>A Theory for Sampling Signals from a Union of Subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Lu2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 56(6), pp. 2334-2345&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Lu2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Lu2008,
+  author = {Lu, Y.M. and Do, M.N.},
+  title = {A Theory for Sampling Signals from a Union of Subspaces},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2008},
+  volume = {56},
+  number = {6},
+  pages = {2334--2345}
+}
+</pre></td>
+</tr>
+<tr id="Lu2008a" class="entry">
+	<td>Lu, Y.M. &amp; Do, M.N.</td>
+	<td>Sampling Signals from a Union of Subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Lu2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Signal. Proc. Mag.<br/>Vol. 25(2), pp. 41-47&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/MSP.2007.914999">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Lu2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Lu2008a,
+  author = {Lu, Y. M. and Do, M. N.},
+  title = {Sampling Signals from a Union of Subspaces},
+  journal = {IEEE Signal. Proc. Mag.},
+  year = {2008},
+  volume = {25},
+  number = {2},
+  pages = {41--47},
+  doi = {http://dx.doi.org/10.1109/MSP.2007.914999}
+}
+</pre></td>
+</tr>
+<tr id="Ma2011" class="entry">
+	<td>Ma, J.</td>
+	<td>Improved Iterative Curvelet Thresholding for Compressed Sensing and Measurement <p class="infolinks">[<a href="javascript:toggleInfo('Ma2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>IEEE T. Instrum. Meas.<br/>Vol. 60(1), pp. 126-136&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Ma2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ma2011,
+  author = {Ma, J.},
+  title = {Improved Iterative Curvelet Thresholding for Compressed Sensing and Measurement},
+  journal = {IEEE T. Instrum. Meas.},
+  publisher = {IEEE},
+  year = {2011},
+  volume = {60},
+  number = {1},
+  pages = {126--136}
+}
+</pre></td>
+</tr>
+<tr id="Ma2010" class="entry">
+	<td>Ma, J.</td>
+	<td>Compressed Sensing for Surface Characterization and Metrology <p class="infolinks">[<a href="javascript:toggleInfo('Ma2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Instrum. Meas.<br/>Vol. 59(6), pp. 1600-1615&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIM.2009.2027744">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Ma2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ma2010,
+  author = {Jianwei Ma},
+  title = {Compressed Sensing for Surface Characterization and Metrology},
+  journal = {IEEE T. Instrum. Meas.},
+  year = {2010},
+  volume = {59},
+  number = {6},
+  pages = {1600--1615},
+  doi = {http://dx.doi.org/10.1109/TIM.2009.2027744}
+}
+</pre></td>
+</tr>
+<tr id="Ma2009a" class="entry">
+	<td>Ma, J.</td>
+	<td>Single-Pixel Remote Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Ma2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE Geosci. Remote. S.<br/>Vol. 6(2), pp. 199-203&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Ma2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ma2009a,
+  author = {Jianwei Ma},
+  title = {Single-Pixel Remote Sensing},
+  journal = {IEEE Geosci. Remote. S.},
+  year = {2009},
+  volume = {6},
+  number = {2},
+  pages = {199-203}
+}
+</pre></td>
+</tr>
+<tr id="Ma2008" class="entry">
+	<td>Ma, J.</td>
+	<td>Compressed Sensing by Inverse Scale Space and Curvelet Thresholding <p class="infolinks">[<a href="javascript:toggleInfo('Ma2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Applied Mathematics and Computation<br/>Vol. 206(2), pp. 980-988&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Ma2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ma2008,
+  author = {Jianwei Ma},
+  title = {Compressed Sensing by Inverse Scale Space and Curvelet Thresholding},
+  journal = {Applied Mathematics and Computation},
+  year = {2008},
+  volume = {206},
+  number = {2},
+  pages = {980-988}
+}
+</pre></td>
+</tr>
+<tr id="Ma2009" class="entry">
+	<td>Ma, J. &amp; Le Dimet, F.-X.</td>
+	<td>Deblurring From Highly Incomplete Measurements for Remote Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Ma2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Geosci. Remote.<br/>Vol. 47(3), pp. 792-802&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TGRS.2008.2004709">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Ma2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ma2009,
+  author = {Jianwei Ma and Le Dimet, F.-X.},
+  title = {Deblurring From Highly Incomplete Measurements for Remote Sensing},
+  journal = {IEEE T. Geosci. Remote.},
+  year = {2009},
+  volume = {47},
+  number = {3},
+  pages = {792--802},
+  doi = {http://dx.doi.org/10.1109/TGRS.2008.2004709}
+}
+</pre></td>
+</tr>
+<tr id="Mairal2008" class="entry">
+	<td>Mairal, J., Bach, F., Ponce, J., Sapiro, G. &amp; Zisserman, A.</td>
+	<td>Learning Discriminative Dictionaries for Local Image Analysis <p class="infolinks">[<a href="javascript:toggleInfo('Mairal2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>CVPR&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Mairal2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Mairal2008,
+  author = {Mairal, J. and Bach, F. and Ponce, J. and Sapiro, G. and Zisserman, A.},
+  title = {Learning Discriminative Dictionaries for Local Image Analysis},
+  booktitle = {CVPR},
+  year = {2008}
+}
+</pre></td>
+</tr>
+<tr id="Malioutov2008" class="entry">
+	<td>Malioutov, D., Sanghavi, S. &amp; Willsky, A.</td>
+	<td>Compressed Sensing with Sequential Observations <p class="infolinks">[<a href="javascript:toggleInfo('Malioutov2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>ICASSP&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Malioutov2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Malioutov2008,
+  author = {Malioutov, D. and Sanghavi, S. and Willsky, A.},
+  title = {Compressed Sensing with Sequential Observations},
+  booktitle = {ICASSP},
+  year = {2008}
+}
+</pre></td>
+</tr>
+<tr id="Mendelson2008" class="entry">
+	<td>Mendelson, S., Pajor, A. &amp; Tomczak-Jaegermann, N.</td>
+	<td>Uniform Uncertainty Principle for Bernoulli and Subgaussian Ensembles <p class="infolinks">[<a href="javascript:toggleInfo('Mendelson2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Mendelson2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Constructive Approximation<br/>Vol. 28(3), pp. 277-289&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1007/s00365-007-9005-8">DOI</a> <a href="http://www.springerlink.com/content/c33018q1h02334x2/">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Mendelson2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The paper considers random matrices with independent subgaussian columns and provides a new elementary proof of the Uniform Uncertainty Principle for such matrices. The Principle was introduced by Candes, Romberg and Tao in 2004; for subgaussian random matrices it was carlier proved by the present authors, as a consequence of a general result based on a generic chaining method of Talagrand. The present proof combines a simple measure concentration and a covering argument, which are standard tools of high-dimensional convexity.</td>
+</tr>
+<tr id="bib_Mendelson2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Mendelson2008,
+  author = {Shahar Mendelson and Alain Pajor and Nicole Tomczak-Jaegermann},
+  title = {Uniform Uncertainty Principle for Bernoulli and Subgaussian Ensembles},
+  journal = {Constructive Approximation},
+  year = {2008},
+  volume = {28},
+  number = {3},
+  pages = {277-289},
+  url = {http://www.springerlink.com/content/c33018q1h02334x2/},
+  doi = {http://dx.doi.org/10.1007/s00365-007-9005-8}
+}
+</pre></td>
+</tr>
+<tr id="Mishali2010" class="entry">
+	<td>Mishali, M. &amp; Eldar, Y.</td>
+	<td>From theory to practice: Sub-Nyquist sampling of sparse wideband analog signals <p class="infolinks">[<a href="javascript:toggleInfo('Mishali2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Selected Topics in Signal Processing, IEEE Journal of<br/>Vol. 4(2), pp. 375-391&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Mishali2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Mishali2010,
+  author = {Mishali, M. and Eldar, Y.C.},
+  title = {From theory to practice: Sub-Nyquist sampling of sparse wideband analog signals},
+  journal = {Selected Topics in Signal Processing, IEEE Journal of},
+  publisher = {IEEE},
+  year = {2010},
+  volume = {4},
+  number = {2},
+  pages = {375--391}
+}
+</pre></td>
+</tr>
+<tr id="Mishali2009" class="entry">
+	<td>Mishali, M. &amp; Eldar, Y.</td>
+	<td>Blind multiband signal reconstruction: Compressed sensing for analog signals <p class="infolinks">[<a href="javascript:toggleInfo('Mishali2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Signal Processing, IEEE Transactions on<br/>Vol. 57(3), pp. 993-1009&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Mishali2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Mishali2009,
+  author = {Mishali, M. and Eldar, Y.C.},
+  title = {Blind multiband signal reconstruction: Compressed sensing for analog signals},
+  journal = {Signal Processing, IEEE Transactions on},
+  publisher = {IEEE},
+  year = {2009},
+  volume = {57},
+  number = {3},
+  pages = {993--1009}
+}
+</pre></td>
+</tr>
+<tr id="Mishali2011" class="entry">
+	<td>MISHALI, M., ELDAR, Y., DOUNAEVSKY, O. &amp; SHOSHAN, E.</td>
+	<td>Xampling: analog to digital at sub-Nyquist rates <p class="infolinks">[<a href="javascript:toggleInfo('Mishali2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>IET circuits, devices &amp; systems<br/>Vol. 5(1), pp. 8-20&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Mishali2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Mishali2011,
+  author = {MISHALI, M. and ELDAR, YC and DOUNAEVSKY, O. and SHOSHAN, E.},
+  title = {Xampling: analog to digital at sub-Nyquist rates},
+  journal = {IET circuits, devices &amp; systems},
+  publisher = {Institution of Engineering and Technology},
+  year = {2011},
+  volume = {5},
+  number = {1},
+  pages = {8--20}
+}
+</pre></td>
+</tr>
+<tr id="Needell2009" class="entry">
+	<td>Needell, D. &amp; Tropp, J.</td>
+	<td>CoSaMP: Iterative Signal Recovery from Incomplete and Inaccurate Samples <p class="infolinks">[<a href="javascript:toggleInfo('Needell2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Applied and Computational Harmonic Analysis<br/>Vol. 26(3), pp. 301 - 321&nbsp;</td>
+	<td>article</td>
+	<td><a href="DOI: 10.1016/j.acha.2008.07.002">DOI</a> <a href="http://www.sciencedirect.com/science/article/B6WB3-4T1Y404-1/2/a3a764ae1efc1bd0569dcde301f0c6f1">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Needell2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Needell2009,
+  author = {D. Needell and J.A. Tropp},
+  title = {CoSaMP: Iterative Signal Recovery from Incomplete and Inaccurate Samples},
+  journal = {Applied and Computational Harmonic Analysis},
+  year = {2009},
+  volume = {26},
+  number = {3},
+  pages = {301 - 321},
+  url = {http://www.sciencedirect.com/science/article/B6WB3-4T1Y404-1/2/a3a764ae1efc1bd0569dcde301f0c6f1},
+  doi = {DOI: 10.1016/j.acha.2008.07.002}
+}
+</pre></td>
+</tr>
+<tr id="Needell2008a" class="entry">
+	<td>Needell, D., Tropp, J. &amp; Vershynin, R.</td>
+	<td>Greedy Signal Recovery Review <p class="infolinks">[<a href="javascript:toggleInfo('Needell2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proc. 42nd Asilomar Conf. Signals, Systems and Computers, pp. 1048-1050&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ACSSC.2008.5074572">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Needell2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Needell2008a,
+  author = {Needell, D. and Tropp, J. and Vershynin, R. },
+  title = {Greedy Signal Recovery Review},
+  booktitle = {Proc. 42nd Asilomar Conf. Signals, Systems and Computers},
+  year = {2008},
+  pages = {1048--1050},
+  doi = {http://dx.doi.org/10.1109/ACSSC.2008.5074572}
+}
+</pre></td>
+</tr>
+<tr id="Olshausen1997" class="entry">
+	<td>Olshausen, B. &amp; Field, D.</td>
+	<td>Sparse coding with an overcomplete basis set: A strategy employed by V1? <p class="infolinks">[<a href="javascript:toggleInfo('Olshausen1997','bibtex')">BibTeX</a>]</p></td>
+	<td>1997</td>
+	<td>Vision research<br/>Vol. 37(23), pp. 3311-3325&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Olshausen1997" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Olshausen1997,
+  author = {Olshausen, B.A. and Field, D.J.},
+  title = {Sparse coding with an overcomplete basis set: A strategy employed by V1?},
+  journal = {Vision research},
+  publisher = {Elsevier},
+  year = {1997},
+  volume = {37},
+  number = {23},
+  pages = {3311--3325}
+}
+</pre></td>
+</tr>
+<tr id="Wipf2004" class="entry">
+	<td>P. Wipf, D. &amp; D. Rao, D.</td>
+	<td>Sparse Bayesian Learning for Basis Selection <p class="infolinks">[<a href="javascript:toggleInfo('Wipf2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 52(8), pp. 2153-2164&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Wipf2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wipf2004,
+  author = {P. Wipf, David and D. Rao, D.},
+  title = {Sparse Bayesian Learning for Basis Selection},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2004},
+  volume = {52},
+  number = {8},
+  pages = {2153-2164}
+}
+</pre></td>
+</tr>
+<tr id="Paisley2009" class="entry">
+	<td>Paisley, J. &amp; Carin, L.</td>
+	<td>Nonparametric Factor Analysis with Beta Process Priors <p class="infolinks">[<a href="javascript:toggleInfo('Paisley2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>ICML, pp. 777-784&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://doi.acm.org/10.1145/1553374.1553474">DOI</a> <a href="http://doi.acm.org/10.1145/1553374.1553474">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Paisley2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Paisley2009,
+  author = {Paisley, John and Carin, Lawrence},
+  title = {Nonparametric Factor Analysis with Beta Process Priors},
+  booktitle = {ICML},
+  publisher = {ACM},
+  year = {2009},
+  pages = {777--784},
+  url = {http://doi.acm.org/10.1145/1553374.1553474},
+  doi = {http://doi.acm.org/10.1145/1553374.1553474}
+}
+</pre></td>
+</tr>
+<tr id="Peyre2007" class="entry">
+	<td>Peyr&eacute;, G.</td>
+	<td>Best basis compressed sensing <p class="infolinks">[<a href="javascript:toggleInfo('Peyre2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(5), pp. 2613-2622&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Peyre2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Peyre2007,
+  author = {Peyr&eacute;, G.},
+  title = {Best basis compressed sensing},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2010},
+  volume = {58},
+  number = {5},
+  pages = {2613--2622}
+}
+</pre></td>
+</tr>
+<tr id="Research" class="entry">
+	<td>Research, W.</td>
+	<td>"Logistic Map" <p class="infolinks">[<a href="javascript:toggleInfo('Research','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>http://documents.wolfram.com/&nbsp;</td>
+	<td>misc</td>
+	<td><a href="http://documents.wolfram.com/mathematica/Demos/SoundGallery/LogisticMap.html.">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Research" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@misc{Research,
+  author = {Wolfram Research},
+  title = {"Logistic Map"},
+  url = {http://documents.wolfram.com/mathematica/Demos/SoundGallery/LogisticMap.html.}
+}
+</pre></td>
+</tr>
+<tr id="Wolfram" class="entry">
+	<td>Research, W.</td>
+	<td>"Logistic Map" <p class="infolinks">[<a href="javascript:toggleInfo('Wolfram','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>http://documents.wolfram.com/&nbsp;</td>
+	<td>misc</td>
+	<td><a href="http://documents.wolfram.com/mathematica/Demos/SoundGallery/LogisticMap.html.">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Wolfram" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@misc{Wolfram,
+  author = {Wolfram Research},
+  title = {"Logistic Map"},
+  url = {http://documents.wolfram.com/mathematica/Demos/SoundGallery/LogisticMap.html.}
+}
+</pre></td>
+</tr>
+<tr id="Resources" class="entry">
+	<td>Resources, R.C.S.</td>
+	<td>http://dsp.rice.edu/cs <p class="infolinks">[<a href="javascript:toggleInfo('Resources','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>&nbsp;</td>
+	<td>misc</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Resources" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@misc{Resources,
+  author = {RICE Compressive Sensing Resources},
+  title = {http://dsp.rice.edu/cs}
+}
+</pre></td>
+</tr>
+<tr id="Robert2004" class="entry">
+	<td>Robert, C.P. &amp; Casella, G.</td>
+	<td>Monte Carlo Statistical Methods <p class="infolinks">[<a href="javascript:toggleInfo('Robert2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Robert2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@book{Robert2004,
+  author = {Robert, C. P. and Casella, G.},
+  title = {Monte Carlo Statistical Methods},
+  publisher = {Springer Verlag},
+  year = {2004}
+}
+</pre></td>
+</tr>
+<tr id="Saevarsson2006" class="entry">
+	<td>Saevarsson, B.B., Sveinsson, J.R. &amp; Benediktsson, J.A.</td>
+	<td>Combined Curvelet and Wavelet Denoising <p class="infolinks">[<a href="javascript:toggleInfo('Saevarsson2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Proc. 7th Nordic Signal Processing Symposium NORSIG 2006, pp. 318-321&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/NORSIG.2006.275244">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Saevarsson2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Saevarsson2006,
+  author = {Saevarsson, B. B. and Sveinsson, J. R. and Benediktsson, J. A.},
+  title = {Combined Curvelet and Wavelet Denoising},
+  booktitle = {Proc. 7th Nordic Signal Processing Symposium NORSIG 2006},
+  year = {2006},
+  pages = {318--321},
+  doi = {http://dx.doi.org/10.1109/NORSIG.2006.275244}
+}
+</pre></td>
+</tr>
+<tr id="Shannon1984a" class="entry">
+	<td>Shannon, C.E.</td>
+	<td>Communication in the Presence of Noise <p class="infolinks">[<a href="javascript:toggleInfo('Shannon1984a','bibtex')">BibTeX</a>]</p></td>
+	<td>1984</td>
+	<td>Proceedings of the IEEE<br/>Vol. 72(9), pp. 1192-1201&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Shannon1984a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Shannon1984a,
+  author = {Shannon, C. E.},
+  title = {Communication in the Presence of Noise},
+  journal = {Proceedings of the IEEE},
+  year = {1984},
+  volume = {72},
+  number = {9},
+  pages = {1192--1201}
+}
+</pre></td>
+</tr>
+<tr id="Shannon1949" class="entry">
+	<td>Shannon, C.E.</td>
+	<td>Communication in the Presence of Noise <p class="infolinks">[<a href="javascript:toggleInfo('Shannon1949','bibtex')">BibTeX</a>]</p></td>
+	<td>1949</td>
+	<td>Proceedings of the IRE<br/>Vol. 37(1), pp. 10-21&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/JRPROC.1949.232969">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Shannon1949" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Shannon1949,
+  author = {Shannon, C. E.},
+  title = {Communication in the Presence of Noise},
+  journal = {Proceedings of the IRE},
+  year = {1949},
+  volume = {37},
+  number = {1},
+  pages = {10--21},
+  doi = {http://dx.doi.org/10.1109/JRPROC.1949.232969}
+}
+</pre></td>
+</tr>
+<tr id="Sun2009" class="entry">
+	<td>Sun, H. &amp; Maitre, H.</td>
+	<td>Turbo Iterative Signal Processing <p class="infolinks">[<a href="javascript:toggleInfo('Sun2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proc. IEEE 13th Digital Signal Processing Workshop and 5th IEEE Signal Processing Education Workshop DSP/SPE 2009, pp. 495-500&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/DSP.2009.4785974">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Sun2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Sun2009,
+  author = {Hong Sun and Maitre, H.},
+  title = {Turbo Iterative Signal Processing},
+  booktitle = {Proc. IEEE 13th Digital Signal Processing Workshop and 5th IEEE Signal Processing Education Workshop DSP/SPE 2009},
+  year = {2009},
+  pages = {495--500},
+  doi = {http://dx.doi.org/10.1109/DSP.2009.4785974}
+}
+</pre></td>
+</tr>
+<tr id="Sun2003" class="entry">
+	<td>Sun, H., Maitre, H. &amp; Guan, B.</td>
+	<td>Turbo Image Restoration <p class="infolinks">[<a href="javascript:toggleInfo('Sun2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><br/>Vol. 1Proc. Seventh International Symposium on Signal Processing and Its Applications, pp. 417-420&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1109/ISSPA.2003.1224729">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Sun2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Sun2003,
+  author = {Hong Sun and Maitre, H. and Bao Guan},
+  title = {Turbo Image Restoration},
+  booktitle = {Proc. Seventh International Symposium on Signal Processing and Its Applications},
+  year = {2003},
+  volume = {1},
+  pages = {417--420},
+  doi = {http://dx.doi.org/10.1109/ISSPA.2003.1224729}
+}
+</pre></td>
+</tr>
+<tr id="Thibaux2007" class="entry">
+	<td>Thibaux, R. &amp; Jordan, M.I.</td>
+	<td>Hierarchical Beta Processes and the Indian Buffet Process <p class="infolinks">[<a href="javascript:toggleInfo('Thibaux2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>International Conference on Artificial Intelligence and Statistics&nbsp;</td>
+	<td>conference</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Thibaux2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@conference{Thibaux2007,
+  author = {Thibaux, R. and Jordan, M. I.},
+  title = {Hierarchical Beta Processes and the Indian Buffet Process},
+  booktitle = {International Conference on Artificial Intelligence and Statistics},
+  year = {2007}
+}
+</pre></td>
+</tr>
+<tr id="Tipping2001" class="entry">
+	<td>Tipping, M.E.</td>
+	<td>Sparse Bayesian Learning and the Relevance Vector Machine <p class="infolinks">[<a href="javascript:toggleInfo('Tipping2001','bibtex')">BibTeX</a>]</p></td>
+	<td>2001</td>
+	<td>J. Mach. Learn. Res.<br/>Vol. 1, pp. 211-244&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1162/15324430152748236">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Tipping2001" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tipping2001,
+  author = {Tipping, Michael E.},
+  title = {Sparse Bayesian Learning and the Relevance Vector Machine},
+  journal = {J. Mach. Learn. Res.},
+  publisher = {JMLR.org},
+  year = {2001},
+  volume = {1},
+  pages = {211--244},
+  doi = {http://dx.doi.org/10.1162/15324430152748236}
+}
+</pre></td>
+</tr>
+<tr id="Tropp2007" class="entry">
+	<td>Tropp, J.A. &amp; Gilbert, A.C.</td>
+	<td>Signal Recovery From Random Measurements Via Orthogonal Matching Pursuit <p class="infolinks">[<a href="javascript:toggleInfo('Tropp2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>IEEE T. Inform. Theory.<br/>Vol. 53(12), pp. 4655-4666&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIT.2007.909108">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Tropp2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tropp2007,
+  author = {Tropp, J. A. and Gilbert, A. C.},
+  title = {Signal Recovery From Random Measurements Via Orthogonal Matching Pursuit},
+  journal = {IEEE T. Inform. Theory.},
+  year = {2007},
+  volume = {53},
+  number = {12},
+  pages = {4655--4666},
+  doi = {http://dx.doi.org/10.1109/TIT.2007.909108}
+}
+</pre></td>
+</tr>
+<tr id="Unser2000" class="entry">
+	<td>Unser, M.</td>
+	<td>Sampling-50 Years after Shannon <p class="infolinks">[<a href="javascript:toggleInfo('Unser2000','bibtex')">BibTeX</a>]</p></td>
+	<td>2000</td>
+	<td>Proceedings of the IEEE<br/>Vol. 88(4), pp. 569-587&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/5.843002">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Unser2000" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Unser2000,
+  author = {Unser, M.},
+  title = {Sampling-50 Years after Shannon},
+  journal = {Proceedings of the IEEE},
+  year = {2000},
+  volume = {88},
+  number = {4},
+  pages = {569--587},
+  doi = {http://dx.doi.org/10.1109/5.843002}
+}
+</pre></td>
+</tr>
+<tr id="Vaswani2010" class="entry">
+	<td>Vaswani, N.</td>
+	<td>LS-CS-Residual (LS-CS): Compressive Sensing on Least Squares Residual <p class="infolinks">[<a href="javascript:toggleInfo('Vaswani2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(8), pp. 4108-4120&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Vaswani2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Vaswani2010,
+  author = {Vaswani, N.},
+  title = {LS-CS-Residual (LS-CS): Compressive Sensing on Least Squares Residual},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2010},
+  volume = {58},
+  number = {8},
+  pages = {4108-4120}
+}
+</pre></td>
+</tr>
+<tr id="Vaswani2010a" class="entry">
+	<td>Vaswani, N. &amp; Lu, W.</td>
+	<td>Modified-CS: Modifying Compressive Sensing for Problems with Partially Known Support <p class="infolinks">[<a href="javascript:toggleInfo('Vaswani2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 58(9), pp. 4595-4607&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Vaswani2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Vaswani2010a,
+  author = {Vaswani, N. and Lu, W.},
+  title = {Modified-CS: Modifying Compressive Sensing for Problems with Partially Known Support},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2010},
+  volume = {58},
+  number = {9},
+  pages = {4595--4607}
+}
+</pre></td>
+</tr>
+<tr id="Velisavljevic2006a" class="entry">
+	<td>Velisavljevic, V., Beferull-Lozano, B., Vetterli, M. &amp; Dragotti, P.L.</td>
+	<td>Directionlets: Anisotropic Multidirectional Representation with Separable Filtering <p class="infolinks">[<a href="javascript:toggleInfo('Velisavljevic2006a','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE T. Image. Process.<br/>Vol. 15(7), pp. 1916-1933&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TIP.2006.877076">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Velisavljevic2006a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Velisavljevic2006a,
+  author = {Velisavljevic, V. and Beferull-Lozano, B. and Vetterli, M. and Dragotti, P. L.},
+  title = {Directionlets: Anisotropic Multidirectional Representation with Separable Filtering},
+  journal = {IEEE T. Image. Process.},
+  year = {2006},
+  volume = {15},
+  number = {7},
+  pages = {1916--1933},
+  doi = {http://dx.doi.org/10.1109/TIP.2006.877076}
+}
+</pre></td>
+</tr>
+<tr id="Vetterli2002" class="entry">
+	<td>Vetterli, M., Marziliano, P. &amp; Blu, T.</td>
+	<td>Sampling Signals with Finite Rate of Innovation <p class="infolinks">[<a href="javascript:toggleInfo('Vetterli2002','bibtex')">BibTeX</a>]</p></td>
+	<td>2002</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 50(6), pp. 1417-1428&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Vetterli2002" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Vetterli2002,
+  author = {Vetterli, M. and Marziliano, P. and Blu, T.},
+  title = {Sampling Signals with Finite Rate of Innovation},
+  journal = {IEEE T. Signal. Proces.},
+  publisher = {IEEE},
+  year = {2002},
+  volume = {50},
+  number = {6},
+  pages = {1417--1428}
+}
+</pre></td>
+</tr>
+<tr id="Vlad2009" class="entry">
+	<td>Vlad, A., Luca, A. &amp; Frunzete, M.</td>
+	<td>Computational Measurements of the Transient Time and of the Sampling Distance That Enables Statistical Independence in the Logistic Map <p class="infolinks">[<a href="javascript:toggleInfo('Vlad2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proc. International Conference on Computational Science and Its Applications (ICCSA), pp. 703-718&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dx.doi.org/10.1007/978-3-642-02457-3_59">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Vlad2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Vlad2009,
+  author = {Vlad, Adriana and Luca, Adrian and Frunzete, Madalin},
+  title = {Computational Measurements of the Transient Time and of the Sampling Distance That Enables Statistical Independence in the Logistic Map},
+  booktitle = {Proc. International Conference on Computational Science and Its Applications (ICCSA)},
+  publisher = {Springer-Verlag},
+  year = {2009},
+  pages = {703--718},
+  doi = {http://dx.doi.org/10.1007/978-3-642-02457-3_59}
+}
+</pre></td>
+</tr>
+<tr id="Walter1992" class="entry">
+	<td>Walter, G.</td>
+	<td>A sampling theorem for wavelet subspaces <p class="infolinks">[<a href="javascript:toggleInfo('Walter1992','bibtex')">BibTeX</a>]</p></td>
+	<td>1992</td>
+	<td>Information Theory, IEEE Transactions on<br/>Vol. 38(2), pp. 881-884&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Walter1992" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Walter1992,
+  author = {Walter, G.G.},
+  title = {A sampling theorem for wavelet subspaces},
+  journal = {Information Theory, IEEE Transactions on},
+  publisher = {IEEE},
+  year = {1992},
+  volume = {38},
+  number = {2},
+  pages = {881--884}
+}
+</pre></td>
+</tr>
+<tr id="Wang2008" class="entry">
+	<td>Wang, K., Pei, W., Xia, H., Nustes, M.G. &amp; Gonzalez, J.</td>
+	<td>Statistical Independence in Nonlinear Maps Coupled to Non-invertible Transformations <p class="infolinks">[<a href="javascript:toggleInfo('Wang2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Phys. Lett. A<br/>Vol. 372(44), pp. 6593 - 6601&nbsp;</td>
+	<td>article</td>
+	<td><a href="DOI: 10.1016/j.physleta.2008.08.054">DOI</a> <a href="http://www.sciencedirect.com/science/article/B6TVM-4TBXGBF-8/2/373723fce6fe2afac73613dd581da68f">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Wang2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wang2008,
+  author = {Kai Wang and Wenjiang Pei and Haishan Xia and Monica Garcia Nustes and J.A. Gonzalez},
+  title = {Statistical Independence in Nonlinear Maps Coupled to Non-invertible Transformations},
+  journal = {Phys. Lett. A},
+  year = {2008},
+  volume = {372},
+  number = {44},
+  pages = {6593 - 6601},
+  url = {http://www.sciencedirect.com/science/article/B6TVM-4TBXGBF-8/2/373723fce6fe2afac73613dd581da68f},
+  doi = {DOI: 10.1016/j.physleta.2008.08.054}
+}
+</pre></td>
+</tr>
+<tr id="Wright2009" class="entry">
+	<td>Wright, J., Yang, A., Ganesh, A., Sastry, S. &amp; Ma, Y.</td>
+	<td>Robust Face Recognition via Sparse Representation <p class="infolinks">[<a href="javascript:toggleInfo('Wright2009','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wright2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE T. Pattern. Anal.<br/>Vol. 31(2), pp. 210-227&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="abs_Wright2009" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We consider the problem of automatically recognizing human faces from frontal views with varying expression and illumination, as well as occlusion and disguise. We cast the recognition problem as one of classifying among multiple linear regression models and argue that new theory from sparse signal representation offers the key to addressing this problem. Based on a sparse representation computed by C1-minimization, we propose a general classification algorithm for (image-based) object recognition. This new framework provides new insights into two crucial issues in face recognition: feature extraction and robustness to occlusion. For feature extraction, we show that if sparsity in the recognition problem is properly harnessed, the choice of features is no longer critical. What is critical, however, is whether the number of features is sufficiently large and whether the sparse representation is correctly computed. Unconventional features such as downsampled images and random projections perform just as well as conventional features such as eigenfaces and Laplacianfaces, as long as the dimension of the feature space surpasses certain threshold, predicted by the theory of sparse representation. This framework can handle errors due to occlusion and corruption uniformly by exploiting the fact that these errors are often sparse with respect to the standard (pixel) basis. The theory of sparse representation helps predict how much occlusion the recognition algorithm can handle and how to choose the training images to maximize robustness to occlusion. We conduct extensive experiments on publicly available databases to verify the efficacy of the proposed algorithm and corroborate the above claims.</td>
+</tr>
+<tr id="bib_Wright2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wright2009,
+  author = {Wright, J. and Yang, A.Y. and Ganesh, A. and Sastry, S.S. and Yi Ma},
+  title = {Robust Face Recognition via Sparse Representation},
+  journal = {IEEE T. Pattern. Anal.},
+  year = {2009},
+  volume = {31},
+  number = {2},
+  pages = {210-227}
+}
+</pre></td>
+</tr>
+<tr id="Yu2008" class="entry">
+	<td>Yu, G., Mallat, S. &amp; Bacry, E.</td>
+	<td>Audio Denoising by Time-Frequency Block Thresholding <p class="infolinks">[<a href="javascript:toggleInfo('Yu2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE T. Signal. Proces.<br/>Vol. 56(5), pp. 1830-1839&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/TSP.2007.912893">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Yu2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Yu2008,
+  author = {Yu, G. and Mallat, S. and Bacry, E.},
+  title = {Audio Denoising by Time-Frequency Block Thresholding},
+  journal = {IEEE T. Signal. Proces.},
+  year = {2008},
+  volume = {56},
+  number = {5},
+  pages = {1830--1839},
+  doi = {http://dx.doi.org/10.1109/TSP.2007.912893}
+}
+</pre></td>
+</tr>
+<tr id="Yu2010a" class="entry">
+	<td>Yu, L., Barbot, J.P., Zheng, G. &amp; Sun, H.</td>
+	<td>Compressive Sensing With Chaotic Sequence <p class="infolinks">[<a href="javascript:toggleInfo('Yu2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>IEEE Signal. Proc. Let.<br/>Vol. 17(8), pp. 731-734&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://dx.doi.org/10.1109/LSP.2010.2052243">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Yu2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Yu2010a,
+  author = {Lei Yu and Barbot, J. P. and Gang Zheng and Hong Sun},
+  title = {Compressive Sensing With Chaotic Sequence},
+  journal = {IEEE Signal. Proc. Let.},
+  year = {2010},
+  volume = {17},
+  number = {8},
+  pages = {731--734},
+  doi = {http://dx.doi.org/10.1109/LSP.2010.2052243}
+}
+</pre></td>
+</tr>
+<tr id="Yu2010b" class="entry">
+	<td>Yu, L., Barbot, J.P., Zheng, G. &amp; Sun, H.</td>
+	<td>Toeplitz-structured Chaotic Sensing Matrix for Compressive Sensing <p class="infolinks">[<a href="javascript:toggleInfo('Yu2010b','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Proc. 7th Int Communication Systems Networks and Digital Signal Processing (CSNDSP) Symp, pp. 229-233&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Yu2010b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Yu2010b,
+  author = {Lei Yu and Barbot, J. P. and Gang Zheng and Hong Sun},
+  title = {Toeplitz-structured Chaotic Sensing Matrix for Compressive Sensing},
+  booktitle = {Proc. 7th Int Communication Systems Networks and Digital Signal Processing (CSNDSP) Symp},
+  year = {2010},
+  pages = {229--233}
+}
+</pre></td>
+</tr>
+<tr id="Yu2010c" class="entry">
+	<td>Yu, L., Sun, H., Barbot, J.P. &amp; Zheng, G.</td>
+	<td>Bayesian Compressive Sensing for Cluster Structured Sparse Signals <p class="infolinks">[<a href="javascript:toggleInfo('Yu2010c','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>&nbsp;</td>
+	<td>unpublished</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Yu2010c" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@unpublished{Yu2010c,
+  author = {Yu, L. and Sun, Hong and Barbot, J. P. and Zheng, G.},
+  title = {Bayesian Compressive Sensing for Cluster Structured Sparse Signals},
+  note = {Submitted to Signal Processing, 2010}
+}
+</pre></td>
+</tr>
+<tr id="Yu2011" class="entry">
+	<td>Yu, L., Sun, H., Barbot, J.P. &amp; Zheng, G.</td>
+	<td>Bayesian Compressive Sensing for Clustered Sparse Signals <p class="infolinks">[<a href="javascript:toggleInfo('Yu2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>ICASSP&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Yu2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Yu2011,
+  author = {Yu, L. and Sun, H. and Barbot, J. P. and Zheng, G.},
+  title = {Bayesian Compressive Sensing for Clustered Sparse Signals},
+  booktitle = {ICASSP},
+  year = {2011}
+}
+</pre></td>
+</tr>
+<tr id="Yu2011b" class="entry">
+	<td>Yu, L., Barbot, J.-P., Zheng, G. &amp; Sun, H.</td>
+	<td>Compressive Sensing for Cluster Structured Sparse Signals: Variational Bayes Approach <p class="infolinks">[<a href="javascript:toggleInfo('Yu2011b','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Yu2011b','bibtex')">BibTeX</a>]</p></td>
+	<td></td>
+	<td>&nbsp;</td>
+	<td>unpublished</td>
+	<td><a href="http://hal.archives-ouvertes.fr/hal-00573953/en/">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Yu2011b" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Compressive Sensing (CS) provides a new paradigm of sub-Nyquist sampling which can be considered as an alternative to Nyquist sampling theorem. In particular, providing that signals are with sparse representations in some known space (or domain), information can be perfectly preserved even with small amount of measurements captured by random projections. Besides sparsity prior of signals, the inherent structure property underline some specific signals is often exploited to enhance the reconstruction accuracy and promote the ability of recovery. In this paper, we are aiming to take into account the cluster structure property of sparse signals, of which the nonzero coefficients appear in clustered blocks. By modeling simultaneously both sparsity and cluster prior within a hierarchical statistical Bayesian framework, a nonparametric algorithm can be obtained through variational Bayes approach to recover original sparse signals. The proposed algorithm could be slightly considered as a generalization of Bayesian CS, but with a consideration on cluster property. Consequently, the performance of the proposed algorithm is at least as good as Bayesian CS, which is verified by the experimental results.</td>
+</tr>
+<tr id="bib_Yu2011b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@unpublished{Yu2011b,
+  author = {Yu, Lei and Barbot, Jean-Pierre and Zheng, Gang and Sun, Hong},
+  title = {Compressive Sensing for Cluster Structured Sparse Signals: Variational Bayes Approach},
+  url = {http://hal.archives-ouvertes.fr/hal-00573953/en/}
+}
+</pre></td>
+</tr>
+<tr id="Shi2009" class="entry">
+	<td>石光明, 刘丹华, 高大化, 刘哲, 林杰, 王良君</td>
+	<td>压缩感知理论及其研究进展 <p class="infolinks">[<a href="javascript:toggleInfo('Shi2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>电子学报<br/>Vol. 37(5), pp. 1070r1081&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Shi2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Shi2009,
+  author = {石光明, 刘丹华, 高大化, 刘哲, 林杰, 王良君},
+  title = {压缩感知理论及其研究进展},
+  journal = {电子学报},
+  year = {2009},
+  volume = {37},
+  number = {5},
+  pages = {1070r1081}
+}
+</pre></td>
+</tr>
+</tbody>
+</table>
+
+<p>
+ <small>Created by <a href="http://jabref.sourceforge.net">JabRef</a> on 21/06/2011.</small>
+</p>
+
+</body>
+</html>
+
+<!-- File generated by JabRef ; Export Filter written by Mark Schenk -->

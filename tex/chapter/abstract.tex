@@ -1,0 +1,23 @@
+\begin{abstract}
+近年来，得益于MEMS传感器技术的发展与微型处理器性能的提高，四轴飞行器受到许多研究机构或公司的关注。但是，目前能够实现自主飞行的小型飞行器很少。在室外环境中，飞行器可以通过GPS定位来实现自主飞行，但是GPS定位的定位精度较低，更新速率慢，延迟大，难以实现精确的轨迹跟踪与进行机动性强的飞行。在室内环境中，由于GPS信号衰减很大，飞行器往往需要依靠复杂的图像处理算法来进行定位，由于算法运算量大导致数据更新速率低，飞行器需要搭载高性能的处理器，飞行器的飞行负载往往亦随之增加。较大的负载量和较低的数据更新频率，使飞行器的机动性受到限制，飞行器在快速跟踪路径时会存在较大的误差。由于上述的问题，在没有精确的定位数据和较高的数据反馈速率的情况下，要深入研究飞行器的运动控制，路径规划，团队合作等问题时，会显得十分困难。
+
+本设计希望能够实现飞行器在室内环境下的高机动性飞行，构建一个相对理想的飞行机器人室内实验平台。通过对各种室内定位系统的调查分析，最终确定参考光学运动捕捉系统的原理，构建了由双目红外相机与主动标记物构成的室内定位系统，该系统有定位精度高，更新速率高，系统鲁棒性强等优点。
+
+对于四轴飞行器，本文根据所导出的飞行器的动力学模型，设计并实现了用于小型四轴飞行器的控制器与状态估计器，与室内定位系统组成了一个完整的室内飞行机器人实验平台。在设计中，首先根据真实飞行器模型参数，通过\matlab软件进行仿真，然后在实验中验证结果。实验结果显示，飞行器的控制器与状态估计器性能良好。同时，也证明了本设计中的室内定位系统具有较高的定位精度，与较好的噪声特性。
+
+在构建了飞行器及其定位系统后，为实现飞行器的自主飞行，本文还对飞行器的路径规划问题进行了研究，给出了飞行器生成最优路径两种方法，实验证明对所生成的路径，飞行器跟踪误差小，并且能够实现较高速的路径跟踪。
+
+\keywords{\heiti\bf室内导航~~四轴飞行器~~控制~~路径规划~~状态估计}
+\end{abstract}
+
+\begin{englishabstract}
+In recent years, thanks to the developments of the MEMS sensor and the microprocessor, quadrotor helicopter had caught the attention of many research institutions or companies, however, very few of them can fly autonomously.While in the outdoor environment some quadrotor helicopter can achieve autonomous flying ability relying on GPS data, but the positioning precision and update rate of GPS base system are low, therefore, it is difficult to achieve precise trajectory tracking and maneuverable flight.In an indoor environment, due to the high attenuation of GPS signals, the position and velocity of the aerial vehicle often need to estimate by some advanced algorithms cooperates with the vehicle-mounted cameras.Because of the heavy computational burden, the update rate of such positioning system is low and the vehicle also needs a more powerful processor which leads to increase the payload.For above reasons, the maneuverability and the tracking precision of the vehicle are limited.These problems make it difficult for the further studying of the motion control, path planning, and team cooperation etc. of the aerial vehicle.
+
+In this thesis, I have developed an aerial robot experimental platform including an indoor positioning system and a quadrotor helicopter which can achieve high performance.Through investigation and analysis, the performances of various kinds of indoor positioning systems, an optical motion capture system like system that can navigate my quadrotor in the indoor environment had been presented.The indoor positioning system consists of two infrared cameras, a desktop computer and a group of active markers.During the experiment, it reported that the indoor positioning system has high precision and high robustness.
+
+During the discussion, a dynamic model of the quadrotor helicopter had been derived, with the derived model, an attitude controller, a position controller, and a state estimator had been designed.Some \matlab simulations had been carried out, base on the simulated results the algorithms have been applied in real tests.The tested result showed that the designed controller and state estimator working well, at the same time it showed that the indoor positioning system has high precision and the noise characteristic is acceptable.
+
+At the latter part of the thesis, in order to achieve the autonomous flying ability of the quadrotor, the path planning problem of the quadrotor had been studied.It gave two kinds of methods to generate optimum trajectories.The experiment results reported that the quadrotor can achieve fast tracking while maintaining the tracking error small.
+
+\englishkeywords{\bf indoor positioning~~~~quadrotor~~~~control~~~~path planning~~~~state estimation}
+\end{englishabstract}

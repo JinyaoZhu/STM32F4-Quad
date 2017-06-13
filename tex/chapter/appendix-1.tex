@@ -1,0 +1,116 @@
+\chapter{欧拉角与旋转矩阵}\label{appendix:euler}
+\section{欧拉角}
+对于三维空间中一个坐标系一次任意的旋转，可以由按次序的三次独立旋转来表示（图\ref{fig:euler_angles}），本文中使用的旋转次序为$Z-Y-X$。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=1.0\textwidth]{figures/euler_angles.jpg}
+  \caption{欧拉角}\label{fig:euler_angles}
+\end{figure}
+
+旋转前的坐标系为$o-xyz$，第一次绕$z$轴旋转角度$\psi$，得到坐标系$o-x^{'}y^{'}z^{'}$，$\psi$称为航偏角。第二次，绕$y^{'}$轴旋转角度$\theta$，得到坐标系$o-x^{''}y^{''}z^{''}$，$\theta$称为俯仰角。第三次，绕$x^{''}$轴旋转角度$\varphi$，得到最终的坐标系$o-x^{'''}y^{'''}z^{'''}$，$\varphi$称为横滚角。
+\section{旋转矩阵}
+\noindent首先，考虑二维平面中的旋转，如（图\ref{fig:2d_rotation}）：
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.45\textwidth]{figures/2d_rotation.jpg}
+  \caption{二维旋转}\label{fig:2d_rotation}
+\end{figure}
+设点$\boldsymbol{p}$在坐标$o-xy$中的坐标为$\left(\begin{array}{cc} p_{x} & p_{y} \\\end{array}\right)^{\mathrm{T}}$，在$o-x^{'}y^{'}$中的坐标为$\left(\begin{array}{cc} p^{'}_{x} & p^{'}_{y} \\\end{array}\right)^{\mathrm{T}}$。根据几何关系可以得到：
+\begin{equation*}
+  \left(
+     \begin{array}{c}
+       p^{'}_{x} \\
+       p^{'}_{y} \\
+     \end{array}
+   \right)=
+   \left(
+     \begin{array}{cc}
+       \cos(\alpha) & \sin(\alpha) \\
+       -\sin(\alpha) & \cos(\alpha)\\
+     \end{array}
+   \right)
+   \left(
+     \begin{array}{c}
+       p_{x} \\
+       p_{y} \\
+     \end{array}
+   \right)
+\end{equation*}
+表示将点$\boldsymbol{p}$从坐标系$o-xy$投影到坐标系$o-x^{'}y^{'}$中。其中：
+\begin{equation*}
+   \left(
+     \begin{array}{cc}
+       \cos(\alpha) & \sin(\alpha) \\
+       -\sin(\alpha) & \cos(\alpha)\\
+     \end{array}
+   \right) = \boldsymbol{R}
+\end{equation*}
+称为旋转矩阵，并且旋转矩阵为正交矩阵有：
+\begin{equation*}
+\boldsymbol{R^{-1}}=\boldsymbol{R^{\mathrm{T}}},|\boldsymbol{R}|=1
+\end{equation*}
+根据欧拉角的定义，三次旋转中每次旋转都可以视为一次二维旋转，因此，一共可以得到三个旋转矩阵：
+\begin{equation*}
+  \boldsymbol{R_{\psi}}=\left(
+                       \begin{array}{ccc}
+                          \cos(\psi)& \sin(\psi) & 0 \\
+                         -\sin(\psi) & \cos(\psi) & 0\\
+                         0 & 0 & 1 \\
+                       \end{array}
+                     \right)
+\end{equation*}
+\vskip 1ex
+\begin{equation*}
+  \boldsymbol{R_{\theta}}=\left(
+                       \begin{array}{ccc}
+                          \cos(\theta)& 0 & -\sin(\theta)\\
+                          0     & 1 & 0\\
+                         \sin(\theta) & 0 & \cos(\theta) \\
+                       \end{array}
+                     \right)
+\end{equation*}
+\vskip 1ex
+\begin{equation*}
+  \boldsymbol{R_{\varphi}}=\left(
+                       \begin{array}{ccc}
+                          1 & 0 & 0 \\
+                         0 & \cos(\varphi) &\sin(\varphi)\\
+                         0 & -\sin(\varphi) & \cos(\varphi) \\
+                       \end{array}
+                     \right)
+\end{equation*}
+\vskip 1ex
+\noindent可以将$o-xyz$中的任意一点$\boldsymbol{p}$投影到$o-x^{'''}y^{'''}z^{'''}$中：
+\begin{equation*}
+  \left(
+    \begin{array}{c}
+      p^{'''}_{x} \\
+      p^{'''}_{y} \\
+      p^{'''}_{z} \\
+    \end{array}
+  \right)=\boldsymbol{R_{\varphi}R_{\theta}R_{\psi}}
+  \left(
+    \begin{array}{c}
+      p_{x} \\
+      p_{y} \\
+      p_{z} \\
+    \end{array}
+  \right)
+\end{equation*}
+若以$o-xyz$为参考坐标系\worldframe，$o-x^{'''}y^{'''}z^{'''}$为机体坐标系\bodyframe，$\boldsymbol{\leftidx{^{b}}R_{w}}$表示\worldframe到\bodyframe的旋转，得：
+\begin{equation*}
+\boldsymbol{\leftidx{^{b}}R_{w}} = \boldsymbol{R_{\varphi}R_{\theta}R_{\psi}} = \left(
+          \begin{array}{ccc}
+            \mathrm{c}\psi \mathrm{c}\theta & \mathrm{s}\psi \mathrm{c}\theta & -\mathrm{s}\theta \\
+            \mathrm{c}\psi \mathrm{s}\theta \mathrm{s}\varphi-\mathrm{s}\psi \mathrm{c}\varphi & \mathrm{s}\psi \mathrm{s}\vartheta \mathrm{s}\varphi+\mathrm{c}\psi \mathrm{c}\varphi & \mathrm{c}\theta \mathrm{s}\varphi\\
+            \mathrm{c}\psi \mathrm{s}\vartheta \mathrm{c}\varphi+\mathrm{s}\psi \mathrm{s}\varphi & \mathrm{s}\psi \mathrm{s}\theta \mathrm{c}\varphi-\mathrm{c}\psi \mathrm{s}\varphi & \mathrm{c}\theta \mathrm{c}\varphi\\
+          \end{array}
+        \right)
+\end{equation*}
+其中s和c分别表示$\sin$和$\cos$。\\
+如果要进行相反的旋转，由\bodyframe旋转到\worldframe，只需利用旋转矩阵的性质：
+\begin{equation*}
+  \boldsymbol{\leftidx{^{w}}R_{b}}=(\boldsymbol{\leftidx{^{b}}R_{w}})^{\boldsymbol{-1}} = (\boldsymbol{\leftidx{^{b}}R_{w}})^{\boldsymbol{\mathrm{T}}}
+\end{equation*}
+
+

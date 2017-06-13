@@ -1,0 +1,506 @@
+\chapter{动力学模型与控制}\label{chap3}
+目前对四轴飞行器的模型与控制问题有较多相关的的研究，文献\citet{Hoffman2008}中，研究了四轴飞行器的姿态控制，以及轨迹跟踪控制问题，其中采用了根轨迹法设计了控制器，考虑了电机模型，利用角加速度反馈来提高姿态控制器的带宽。文献\citet{Gillula2008}中研究了采用混合控制系统令飞行器做出高机动性的动作的方法，文中考虑了二维平面中的飞行器模型，设计了飞行器进行空翻动作的策略。文献\citet{Bouabdallah2007}对四轴飞行器的控制进行了十分详细的讨论，其中尝试了各种控制方法，包括PID，LQ控制，反步法控制和滑模控制。文献\citet{Mellinger2012}中，研究了飞行器在不同负载的情况下进行物理参数实时估计的方法，实现了飞行器在进行物体运输时的自适应控制。本章推导出四轴飞行器的动力学模型，在计算机中进行了仿真，并根据飞行器的动力学模型得到飞行器姿态，位移控制的控制律，并展示了仿真以及实际的测试结果。
+\section{模型建立}\label{chap3:sec1}
+\subsection{电机模型}
+实验中发现电机带动螺旋桨产生的升力与输入到电子调速器的控制信号$u$接近线性关系，电机输入信号与输出升力可以用看作为一个一阶惯性环节，令系统开环传递函数为：
+\begin{equation*}
+  G(s)=\frac{k_F}{Ts+1}
+\end{equation*}
+利用MTALAB系统辨识工具箱进行系统辨识，得到$k_F=3.174,T=0.0835\mathrm{s}$，阶跃响应如（图\ref{fig:motor_step}）。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/motor_step.jpg}
+  \caption{电机阶跃响应}\label{fig:motor_step}
+\end{figure}
+
+由于相对于飞行控制系统，电机的时常数较小，这里将简化电机模型，令每个螺旋桨产生的升力$F_i$与电子调速器输入的信号$u_i$的关系为:
+\begin{equation}\label{eq:motor_thrust}
+  F_i = k_F u_i
+\end{equation}
+此外，螺旋桨加速时产生的反扭矩$M_i$也与输入信号$u_i$呈线性关系：
+\begin{equation}\label{eq:motor_anti_troque}
+  M_i = k_M u_i
+\end{equation}
+通过实验测试得到$k_M = 1.063$。
+\subsection{四轴飞行器的运动方程}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/quad_frame.jpg}
+  \caption{机体坐标系与参考坐标系}\label{fig:quad_frame}
+\end{figure}
+飞行器机体坐标系\bodyframe与参考坐标系\worldframe如（图\ref{fig:quad_frame}）定义。四轴飞行器具有六个自由度，包括飞行器机体坐标\bodyframe相对于参考坐标\worldframe的旋转与位移。本文以\mbox{$Z-Y-X$}次序的欧拉角$\boldsymbol{\Omega}$(附录\ref{appendix:euler})来描述飞行器的姿态（即旋转）。
+\begin{equation*}
+  \boldsymbol{\Omega}=\left(
+                        \begin{array}{c}
+                          \varphi \\
+                          \theta \\
+                          \psi \\
+                        \end{array}
+                      \right)
+\end{equation*}
+$\varphi,\theta,\psi$分别表示飞行器的横滚角，俯仰角和航偏角。\\
+机体坐标到参考坐标的旋转矩阵为：
+\begin{equation}\label{eq:rot_b_to_w}
+  \boldsymbol{\leftidx{^{w}}R_{b}} = \left(
+          \begin{array}{ccc}
+            \mathrm{c}\psi \mathrm{c}\theta & \mathrm{c}\psi \mathrm{s}\theta \mathrm{s}\varphi-\mathrm{s}\psi \mathrm{c}\varphi & \mathrm{c}\psi \mathrm{s}\vartheta \mathrm{c}\varphi+\mathrm{s}\psi \mathrm{s}\varphi \\
+            \mathrm{s}\psi \mathrm{c}\theta & \mathrm{s}\psi \mathrm{s}\vartheta \mathrm{s}\varphi+\mathrm{c}\psi \mathrm{c}\varphi & \mathrm{s}\psi \mathrm{s}\theta \mathrm{c}\varphi-\mathrm{c}\psi \mathrm{s}\varphi \\
+            -\mathrm{s}\theta & \mathrm{c}\theta \mathrm{s}\varphi & \mathrm{c}\theta \mathrm{c}\varphi\\
+          \end{array}
+        \right)
+\end{equation}
+其中s和c分别表示$\sin$和$\cos$。\\
+对于\bodyframe中的任意向量$\boldsymbol{v_b}$，与其在\worldframe的投影为$\boldsymbol{v_w}$有如下关系：\\
+\begin{equation}\label{eq:rot_a_vec}
+  \boldsymbol{v_w}=\boldsymbol{\leftidx{^{w}}R_{b}v_b}
+\end{equation}
+飞行器的的位移以$\boldsymbol{r}$来表示：
+\begin{equation*}\label{eq:translation}
+  \boldsymbol{r}  = \left(
+                 \begin{array}{c}
+                   r_x \\
+                   r_y \\
+                   r_z \\
+                 \end{array}
+               \right)
+\end{equation*}
+$r_x,r_y,r_z$为飞行器重心在\worldframe中的对应的三个坐标坐标，飞行器在\worldframe中的速度与加速度则分别为$\boldsymbol{\dot{r}}$和$\boldsymbol{\ddot{r}}$。
+
+\subsubsection*{牛顿方程}
+飞行器位移的运动方程可以通过牛顿方程来描述。忽略空气动力学因素的影响，可以认为作用在飞行器上的力只有两个，一个是四个螺旋桨提供的升力的合力$\boldsymbol{\mathcal{F}}$，并且该力永远指向$z_b$方向。另一个是机体受到的重力$m\boldsymbol{a}$，方向为$-z_w$。利用旋转矩阵（式\ref{eq:rot_b_to_w}），关系（式\ref{eq:rot_a_vec}），以及牛顿定律$\boldsymbol{F}=m\boldsymbol{a}$，可以获得飞行器在\worldframe中的加速度$\boldsymbol{\ddot{r}}$：
+\begin{equation}\label{eq:ma_in_world}
+  m\boldsymbol{\ddot{r}}=\boldsymbol{\leftidx{^{w}}R_{b}} \left(
+                          \begin{array}{c}
+                           0 \\
+                           0 \\
+                           \mathcal{F}
+                         \end{array}
+                         \right)-
+                         \left(
+                           \begin{array}{c}
+                             0 \\
+                             0 \\
+                             mg \\
+                           \end{array}
+                         \right)
+\end{equation}
+进一步得：
+\begin{equation}\label{eq:acc_in_world}
+  \boldsymbol{\ddot{r}}=\boldsymbol{\leftidx{^{w}}R_{b}} \left(
+                          \begin{array}{c}
+                           0 \\
+                           0 \\
+                           \mathcal{F}/m
+                         \end{array}
+                         \right)-
+                         \left(
+                           \begin{array}{c}
+                             0 \\
+                             0 \\
+                             g \\
+                           \end{array}
+                         \right)
+\end{equation}
+
+\subsubsection*{欧拉方程}
+飞行器的旋转运动由四个螺旋桨的升力差产生，提供了绕$x_b,y_b,z_b$轴的旋转力矩，飞行器的旋转运动可以用欧拉方程来描述。飞行器绕$x_b,y_b,z_b$三个轴旋转的角速度用$\boldsymbol{\omega}$来表示：
+\begin{equation*}
+  \boldsymbol{\omega} = \left(
+                          \begin{array}{c}
+                            p \\
+                            q \\
+                            r \\
+                          \end{array}
+                        \right)
+\end{equation*}
+$p,q,r$分别为绕$x_b,y_b,z_b$轴旋转的角速度。\\
+根据欧拉方程有：\\
+\begin{equation*}
+  \boldsymbol{I}\boldsymbol{\dot{\omega}}=\boldsymbol{\mathcal{M}}-\boldsymbol{\omega}\times \boldsymbol{I}\boldsymbol{\omega}
+\end{equation*}
+即：
+\begin{equation}\label{eq:angular_accel}
+  \boldsymbol{\dot{\omega}}=\boldsymbol{I}^{-1}(\boldsymbol{\mathcal{M}}-\boldsymbol{\omega}\times \boldsymbol{I}\boldsymbol{\omega})
+\end{equation}
+其中$\boldsymbol{I}$为飞行器的惯量矩。
+再由欧拉角的定义，可以得出欧拉角微分$\boldsymbol{\dot{\Omega}}$与机体角速度$\boldsymbol{\omega}$的关系(附录\ref{appendix:euler_dot_omega})：
+\begin{equation*}
+  \boldsymbol{\dot{\Omega}}=\left(
+    \begin{array}{c}
+      \dot{\varphi} \\
+      \dot{\theta} \\
+      \dot{\psi} \\
+    \end{array}
+  \right)
+  =\left(
+                        \begin{array}{ccc}
+                          1 & \tan(\theta)\sin(\varphi) & \tan(\theta)\cos(\varphi) \\
+                          0 & \cos(\varphi) & -\sin(\varphi) \\
+                          0 & \sec(\theta)\sin(\varphi) & \sec(\theta)\cos(\varphi) \\
+                        \end{array}
+                      \right)\boldsymbol{\omega}
+\end{equation*}
+以$\boldsymbol{W}$来表示该关系矩阵：
+\begin{equation*}\label{eq:matrix_w}
+  \boldsymbol{W}=\left(
+                        \begin{array}{ccc}
+                          1 & \tan(\theta)\sin(\varphi) & \tan(\theta)\cos(\varphi) \\
+                          0 & \cos(\varphi) & -\sin(\varphi) \\
+                          0 & \sec(\theta)\sin(\varphi) & \sec(\theta)\cos(\varphi) \\
+                        \end{array}
+                      \right)
+\end{equation*}%欧拉角微分与角速度关系
+即：
+\begin{equation}\label{eq:euler_dot_and_omega}
+  \boldsymbol{\dot{\Omega}}=\boldsymbol{W}\boldsymbol{\omega}
+\end{equation}
+
+利用（式\ref{eq:acc_in_world}），（式\ref{eq:angular_accel}）以及（式\ref{eq:euler_dot_and_omega}）可以建立飞行器的非线性状态方程：
+\begin{equation}\label{eq:state_space_eq}%状态空间方程
+  \boldsymbol{x}=\left(
+                   \begin{array}{c}
+                     \boldsymbol{r} \\
+                     \boldsymbol{\dot{r}} \\
+                     \boldsymbol{\Omega} \\
+                     \boldsymbol{\omega} \\
+                   \end{array}
+                 \right),
+  \boldsymbol{\dot{x}}=\left(
+                         \begin{array}{c}
+                           \boldsymbol{\dot{r}} \\
+                           \boldsymbol{\leftidx{^{w}}R_{b}} \left(
+                          \begin{array}{c}
+                           0 \\
+                           0 \\
+                           \mathcal{F}/m
+                         \end{array}
+                         \right)-
+                         \left(
+                           \begin{array}{c}
+                             0 \\
+                             0 \\
+                             g \\
+                           \end{array}
+                         \right) \\
+                           \boldsymbol{W}\boldsymbol{\omega} \\
+                           \boldsymbol{I}^{-1}(\boldsymbol{\mathcal{M}}-\boldsymbol{\omega}\times \boldsymbol{I}\boldsymbol{\omega}) \\
+                         \end{array}
+                       \right)
+\end{equation}
+\vskip 1em
+\section{控制律}\label{chap3:sec2}
+四轴飞行器具有六个自由度，四个控制量，为一个欠驱动系。飞行器的的控制主要分为两部分：姿态控制和位移控制。其中姿态控制器作为飞行器飞行控制的底层控制器，位移控制器根据目标位移，速度以及加速度计算出飞行器的目标姿态，通过改变飞行器的姿态来产生相应的线加速度，从而实现位移控制。姿态控制器应具有较快的响应速度，以及较强的鲁棒性，以获得较好的位移控制效果。本设计中的飞行器姿态控制频率设置为400Hz，位移控制频率设置为200Hz的情况下，能达到较好的控制效果。\\
+四轴飞行器控制系统结构如下（图\ref{fig:controller_structure}）：
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{figures/controller_structure.jpg}
+  \caption{飞行控制系统结构}\label{fig:controller_structure}
+\end{figure}
+\subsection{姿态控制}
+通过简单分析，可得每个螺旋桨的升力$F_i$，反力矩$M_i$与绕机体坐标轴的力矩$\boldsymbol{\mathcal{M}}$的关系如下：\\
+\begin{equation}\label{eq:force_and_troque}
+  \boldsymbol{\mathcal{M}}=\left(
+                             \begin{array}{c}
+                               \mathcal{M}_x \\
+                               \mathcal{M}_y \\
+                               \mathcal{M}_z \\
+                             \end{array}
+                           \right)=
+  \left(
+                             \begin{array}{c}
+                               (-F_1-F_2+F_3+F_4)L \\
+                               (-F_1+F_2+F_3-F_4)L \\
+                               (-M_1+M_2-M_3+M_4)\sqrt{2}L \\
+                             \end{array}
+                           \right)
+\end{equation}
+由（式\ref{eq:motor_thrust}）和（式\ref{eq:motor_anti_troque}）可以得到$F_i$和$M_i$之间的关系：
+\begin{equation*}
+  M_i = \frac{k_M}{k_F}F_i
+\end{equation*}
+令$k_m=\frac{k_M}{k_F}$得：
+\begin{equation}\label{eq:motor_thrust_and_anti_troque}
+  M_i = k_mF_i
+\end{equation}
+将（式\ref{eq:motor_thrust_and_anti_troque}）代入（式\ref{eq:force_and_troque}）可以得：
+\begin{equation}\label{eq:troque_and_force}
+  \boldsymbol{\mathcal{M}}=\left(
+                             \begin{array}{cccc}
+                               -L & -L & L & L \\
+                               -L & L & L & -L \\
+                               -k_{m}\sqrt{2}L & k_{m}\sqrt{2}L & -k_{m}\sqrt{2}L & k_{m}\sqrt{2}L \\
+                             \end{array}
+                           \right)
+                           \left(
+                             \begin{array}{c}
+                               F_1 \\
+                               F_2 \\
+                               F_3 \\
+                               F_4 \\
+                             \end{array}
+                           \right)
+\end{equation}
+令：
+\begin{equation*}
+  \boldsymbol{X}=\left(\begin{array}{cccc}
+                               -L & -L & L & L \\
+                               -L & L & L & -L \\
+                               -k_{m}\sqrt{2}L & k_{m}\sqrt{2}L & -k_{m}\sqrt{2}L & k_{m}\sqrt{2}L \\
+                             \end{array}\right),
+  \boldsymbol{F}=\left(
+                             \begin{array}{c}
+                               F_1 \\
+                               F_2 \\
+                               F_3 \\
+                               F_4 \\
+                             \end{array}
+                           \right)
+\end{equation*}
+飞行器的误差欧拉角$\boldsymbol{\Omega_{error}}$为：
+\begin{equation}\label{eq:error_euler}
+  \boldsymbol{\Omega_{error}}=\boldsymbol{\Omega_{des}}-\boldsymbol{\Omega}
+\end{equation}
+其中$\boldsymbol{\Omega_{des}}$为飞行器的目标欧拉角。\\
+飞行器的姿态控制采用角速度PD控制，结构如（图\ref{fig:att_controller_structure}）：
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figures/att_controller_structure.jpg}
+  \caption{姿态控制器结构}\label{fig:att_controller_structure}
+\end{figure}
+姿态控制器的控制过程大概如下：首先由目标欧拉角$\boldsymbol{\Omega_{des}}$与估计得到的欧拉角$\boldsymbol{\Omega}$得到误差欧拉角$\boldsymbol{\Omega_{error}}$，误差欧拉角$\boldsymbol{\Omega_{error}}$与一个比例系数$\boldsymbol{k^{\Omega}_{p}}$相乘后得到目标欧拉角速度$\boldsymbol{\dot{\Omega}_{des}}$（该系数可以在仿真或实验中调试得出），利用欧拉角微分与机体角速度的关系（式\ref{eq:euler_dot_and_omega}）得到绕机体轴的目标角速度$\boldsymbol{\omega_{des}}$，再通过基于PD控制的角速度控制器输出目标扭矩$\boldsymbol{\mathcal{M}_{des}}$，最后根据螺旋桨升力与机体旋转力矩的关系（式\ref{eq:troque_and_force}）得到四个螺旋桨的目标升力$\boldsymbol{F_{des}}$。
+
+由于机体的三轴角速度独立，基于PD控制的角速度控制器可以看作是三个独立的PD控制器，分别对应\bodyframe中的$x_b,y_b,z_b$轴的角速度控制，输入$\boldsymbol{\omega_{des}}$与输出$\boldsymbol{\mathcal{M}_{des}}$关系如下：
+\begin{equation*}
+  \boldsymbol\omega_{error}=\boldsymbol\omega_{des}-\boldsymbol\omega
+\end{equation*}
+\begin{equation}\label{eq:angular_rate_control}
+  \mathcal{M}_{i}=k^{\omega}_{p,i}\omega_{error,i}+k^{\omega}_{d,i}\dot{\omega}_{error,i},(i=x,y,z)
+\end{equation}
+
+\subsection{位移控制}
+飞行器的位移控制主要分为两步，一是位移的PID控制，二是目标加速度到目标欧拉角的转换，控制器结构如下（图\ref{fig:pos_controller_structure}）：
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/pos_controller_structure.jpg}
+  \caption{位移控制器结构}\label{fig:pos_controller_structure}
+\end{figure}
+\noindent对于每一个\worldframe中每一个轴的位移，控制器应满足以下等式：
+\begin{equation*}
+  (\ddot{r}_{T}-\ddot{r}_{des})+k^r_d(\dot{r}_{T}-\dot{r})+k^r_p(r_{T}-r)+k^r_i\int{(r_{T}-r)dt}=0
+\end{equation*}
+由此得出：
+\begin{equation}\label{eq:pos_control_law}
+  \ddot{r}_{des} = \ddot{r}_{T}+k^r_d(\dot{r}_{T}-\dot{r})+k^r_p(r_{T}-r)+k^r_i\int{(r_{T}-r)dt}
+\end{equation}
+其中$r_T$为目标位移，$\ddot{r}_{des}$为飞行器要产生的加速度，$\ddot{r}_T$为控制器的前馈部分。
+
+由于三轴位移独立，对于飞行器在\worldframe中的$x_w,y_w,z_w$轴的位移控制，可以采用3个与（式\ref{eq:pos_control_law}）相同的PID控制器进行控制。控制器输出飞行器的目标加速度$\boldsymbol{\ddot{r}_{des}}$，利用（式\ref{eq:acc_in_world}）可以得到以下关系：
+\begin{equation}\label{eq:desire_acc_and_euler}
+\begin{array}{c}
+  \ddot{r}_{des,x} =\frac{\mathcal{F}}{m}(\cos(\psi)\sin(\theta_{des})\cos(\varphi)+\sin(\psi)\sin(\varphi)) \\
+  \ddot{r}_{des,y} =\frac{\mathcal{F}}{m}(\sin(\psi)\sin(\theta)\cos(\varphi_{des})-\cos(\psi)\sin(\varphi_{des})) \\
+  \ddot{r}_{des,z} =\frac{\mathcal{F}}{m}\cos(\theta)\cos(\varphi)-g
+\end{array}
+\end{equation}\\
+容易的到$\mathcal{F}$的表达式：
+\begin{equation}\label{eq:control_out_force_z}
+  \mathcal{F} = \frac{m\ddot{r}_{des,z}}{\cos(\theta)\cos(\varphi)}+mg
+\end{equation}
+进一步计算$\theta_{des}$和$\varphi_{des}$。为了简化计算，先将$\boldsymbol{\ddot{r}_{des}}$绕$z_w$轴旋转$\psi$，得到$\boldsymbol{\ddot{r}^{'}_{des}}$：
+\begin{equation}\label{eq:rot_des_acc}
+\begin{array}{c}
+  \ddot{r}^{'}_{des,x} = \cos(\psi)\ddot{r}_{des,x}+\sin(\psi)\ddot{r}_{des,y} \\
+  \ddot{r}^{'}_{des,y} = -\sin(\psi)\ddot{r}_{des,x}+\cos(\psi)\ddot{r}_{des,y} \\
+  \ddot{r}^{'}_{des,z} = \ddot{r}_{des,z}
+\end{array}
+\end{equation}
+此时，再利用（式\ref{eq:desire_acc_and_euler}）可以得到：
+\begin{equation*}
+\begin{array}{c}
+  \ddot{r}^{'}_{des,x} =\frac{\mathcal{F}}{m}\sin(\theta_{des})\cos(\varphi) \\
+  \ddot{r}^{'}_{des,y} =-\frac{\mathcal{F}}{m}\sin(\varphi_{des})
+\end{array}
+\end{equation*}
+进一步得：
+\begin{equation*}
+\begin{array}{c}
+  \varphi_{des}=\mathrm{asin}(-\frac{\ddot{r}^{'}_{des,y}m}{\mathcal{F}}) \\
+  \theta_{des}=\mathrm{asin}(\frac{\ddot{r}^{'}_{des,x}m}{\mathcal{F}\cos(\varphi)})
+\end{array}
+\end{equation*}
+上式中$\mathcal{F}$由$\ddot{r}_{des,z}$计算得出，为了尽量避免$x_w,y_w$轴的位移控制与$z_w$轴耦合，将上式中的$\mathcal{F}$近似为$mg$，得：
+\begin{equation}\label{eq:control_out_des_euler}
+\begin{array}{c}
+  \varphi_{des}=\mathrm{asin}(-\frac{\ddot{r}^{'}_{des,y}}{g}) \\
+  \theta_{des}=\mathrm{asin}(\frac{\ddot{r}^{'}_{des,x}}{g\cos(\varphi)})
+\end{array}
+\end{equation}
+至此得到位移控制器的所有输出（式\ref{eq:control_out_force_z}）（式\ref{eq:control_out_des_euler}）。
+
+\section{仿真与实验结果}\label{chap3:sec3}
+本节给出了飞行器姿态控制器与位移控制器在\matlab中的仿真结果，与在实验中的真实测试结果。
+\subsection{\matlab仿真}
+根据飞行器的状态空间方程（式\ref{eq:state_space_eq}），并根据电机传递函数考虑了电机的延迟，利用\matlab里面的ode45微分方程求解器进行仿真，时间步长为0.01s。
+\subsubsection*{姿态控制}
+采用上述的姿态控制器，$1\mathrm{s}$后给定目标\mbox{$\varphi=0.2\mathrm{rad}$}，2s后再给定目标\mbox{$\varphi=0.0\mathrm{rad}$}，仿真中飞行器的响应如下：
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_roll_control.jpg}
+  \caption{横滚角控制仿真，$k^{\Omega}_{p}=30.2,k^{\omega}_{p}=72.3,k^{\omega}_{d}=4.43$}\label{fig:sim_roll_control}
+\end{figure}\\
+其中控制器的参数通过实验手工粗略整定后，利用梯度下降法，最小化跟踪误差平方的积分，得到相应控制器参数。可以看出在仿真（图\ref{fig:sim_roll_control}）中，$\varphi$角度控制的响应较快，上升时间大约为100ms，超调量小于$5\%$。俯仰角$\theta$的响应基本与横滚角控制的响应一致。
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_yaw_control.jpg}
+  \caption{航偏角控制仿真，$k^{\Omega}_{p}=22.3,k^{\omega}_{p}=63.5,k^{\omega}_{d}=3.32$}\label{fig:sim_yaw_control}
+\end{figure}
+（图\ref{fig:sim_yaw_control}）为仿真中的航偏角控制，在实际中希望航偏角的响应有较小的过冲，因此选取了响应稍慢，超调量少的一组参数。
+
+\subsubsection*{位移控制}
+根据上述设计的位移控制器，在\matlab中进行位移控制的仿真，仿真中通过设置阶跃的目标位移，得到位移控制器的阶跃响应，没有加入控制器中的前馈项。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_x_control.jpg}
+  \caption{位移控制$x$轴仿真，$k^{r}_{p}=25.2,k^{r}_{i}=5.23,k^{r}_{d}=8.58$}\label{fig:sim_pos_x_control}
+\end{figure}
+（图\ref{fig:sim_pos_x_control}）为仿真中位移控制的$x$轴响应，由于飞行器的位移控制需要通过改变飞行器姿态来实现，在第\ref{chap6}章中导出飞行器的电机的输出与飞行器位移为4阶导数的关系，从仿真中也可以看出飞行器的位移控制响应与姿态控制相比延迟较大，响应较慢。$y$轴的响应基本一致。
+
+（图\ref{fig:sim_pos_z_control}）为仿真中位移控制的$z$轴响应。特性与$x,y$轴的响应类似。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_z_control.jpg}
+  \caption{位移控制$z$轴仿真，$k^{r}_{p}=28.2,k^{r}_{i}=6.73,k^{r}_{d}=9.33$}\label{fig:sim_pos_z_control}
+\end{figure}
+
+\subsubsection*{轨迹跟踪}
+在仿真环境中利用第\ref{chap7}章所介绍的方法生成曲线路径并使飞行器跟踪，得到以下仿真结果：
+
+（图\ref{fig:sim_track_curve1}）为飞行器飞行轨迹与路径轨迹，在仿真中，飞行器的路径跟踪效果比较理想。（图\ref{fig:sim_pos_error_when_track_curve1}）显示了三个轴的跟踪误差。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=1.0\textwidth]{figures/sim_track_curve1.jpg}
+  \caption{跟踪曲线轨迹仿真}\label{fig:sim_track_curve1}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_error_when_track_curve1.jpg}
+  \caption{仿真中跟踪曲线轨迹时的误差，误差平方和$x=0.0026\mathrm{m},y=0.0336\mathrm{m},z=0.00\mathrm{m}$}\label{fig:sim_pos_error_when_track_curve1}
+\end{figure}
+
+\subsection{实际测试}
+按照所设计的控制器，在真实的飞行器进行测试，飞行器配置和结构如第\ref{chap2}章所介绍，各项物理参数为（表\ref{tab:quad_param}）：
+\begin{table}[!ht]
+\centering
+\begin{tabular}{|c||c|}
+\hline
+物理量   & 测量结果  \\
+\hline
+$m$     & $0.460\mathrm{kg}$ \\
+\hline
+$L$     & $0.0883\mathrm{m}$ \\
+\hline
+$g$     & $9.81\mathrm{m}/\mathrm{s}^2$ \\
+\hline
+$Ixx$   & $0.000354\mathrm{kg}\cdot \mathrm{m}^2$ \\
+\hline
+$Iyy$   & $0.000365\mathrm{kg}\cdot \mathrm{m}^2$ \\
+\hline
+$Izz$   & $0.000817\mathrm{kg}\cdot \mathrm{m}^2$ \\
+\hline
+$k_F$   & $3.1744$ \\
+\hline
+$k_M$   & $8.653$ \\
+\hline
+\end{tabular}
+\caption{飞行器物理参数}
+  \label{tab:quad_param}
+\end{table}\\
+由于飞行器结构基本对称，飞行器惯量矩阵中的非对角线元素近似为0。测试中以遥控器输入为目标值，测量值为飞行器响应，得到以下测量结果：
+\subsubsection*{姿态控制}
+以仿真中的控制器参数为参考，手动调节真实飞行控制器中的参数，得到以下几组较为适合的控制器参数。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_roll_control.jpg}
+  \caption{横滚角控制实际响应，$k^{\Omega}_{p}=14.28,k^{\omega}_{p}=65.4,k^{\omega}_{d}=4.82$}\label{fig:real_roll_control}
+\end{figure}
+（图\ref{fig:real_roll_control}）为真实飞行器的横滚角响应，由数据可以看出，控制器跟踪较好，但跟仿真结果相比，响应有一定的滞后。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pitch_control.jpg}
+  \caption{俯仰角控制实际响应，$k^{\Omega}_{p}=14.28,k^{\omega}_{p}=65.4,k^{\omega}_{d}=4.82$}\label{fig:real_pitch_control}
+\end{figure}
+（图\ref{fig:real_pitch_control}）为真实飞行器的俯仰角响应，类似横滚角的响应，曲线跟踪较好。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_yaw_control.jpg}
+  \caption{航偏角控制实际响应，$k^{\Omega}_{p}=18.74,k^{\omega}_{p}=76.5,k^{\omega}_{d}=3.72$}\label{fig:real_yaw_control}
+\end{figure}
+（图\ref{fig:real_yaw_control}）为真实飞行器的航偏角控制的响应，由曲线可以看出航偏角度控制器的跟踪效果比较好。
+
+由以上三个结果可以看出，飞行器的姿态控制效果不错，响应较快，跟踪比较准确，姿态曲线平滑，噪声较小。在实验中，飞行器的姿态横滚角度超过$\pm60^\circ$时，飞行器仍能迅速恢复到悬停状态，挂载100g重物时没有出现振荡现象，控制器鲁棒性比较好。
+
+\subsubsection*{位移控制}
+以仿真中的控制器参数为参考值，调节真实控制器中的参数，得到以下测量结果：
+
+（图\ref{fig:real_pos_x_control}）为$x$轴位移控制效果，由曲线可以看出位移控制响应的超调量大，响应比较慢。这是因为在实验中发现，当位移控制器在进行轨迹跟踪时，由于控制器加入了前馈，对控制器的响应速度要求并不高，较慢的响应对轨迹跟踪的误差影响并不大（图\ref{fig:real_traj_track_pos_x}）。而较快的位移控制响应，在高速跟踪轨迹，或者飞行器大角度飞行时，时容易引起控制器不稳定，使飞行器状态震荡或者发散。因此，希望在控制器响应能接受的范围内，令控制器鲁棒性尽量高，以获得较好，较安全的轨迹跟踪结果。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_x_control.jpg}
+  \caption{位移控制$x$轴实际响应，$k^{r}_{p}=15.3,k^{r}_{i}=8.43,k^{r}_{d}=10.2$}\label{fig:real_pos_x_control}
+\end{figure}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_y_control.jpg}
+  \caption{位移控制$y$轴实际响应，$k^{r}_{p}=15.3,k^{r}_{i}=8.43,k^{r}_{d}=10.2$}\label{fig:real_pos_y_control}
+\end{figure}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_z_control.jpg}
+  \caption{位移控制$z$轴实际响应，$k^{r}_{p}=18.4,k^{r}_{i}=10.4,k^{r}_{d}=15.3$}\label{fig:real_pos_z_control}
+\end{figure}
+（图\ref{fig:real_pos_y_control}）（图\ref{fig:real_pos_z_control}）为$y,z$轴位移控制效果，与$x$轴结果相似。
+
+（图\ref{fig:pos_error_when_hovering}）为飞行器悬停时测得的位置误差，从数据可以看出，飞行器的悬停精度大概在$\pm1\mathrm{cm}$，得到$x,y,z$轴误差的标准差为$\sigma_{x}=0.0025\mathrm{m},\sigma_{y}=0.0062\mathrm{m},\sigma_{z}=0.0024\mathrm{m}$。飞行器的悬停效果比较理想。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/pos_error_when_hovering.jpg}
+  \caption{悬停时的位置误差，$\sigma_{x}=0.0025\mathrm{m},\sigma_{y}=0.0062\mathrm{m},\sigma_{z}=0.0024\mathrm{m}$}\label{fig:pos_error_when_hovering}
+\end{figure}
+
+\subsubsection*{轨迹跟踪}
+利用第\ref{chap6}章中介绍的路径生成方法，令飞行器跟踪给定的飞行轨迹，得到以下测试结果：
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_traj_track_pos_x.jpg}
+  \caption{跟踪直线轨迹时$x$轴响应，误差平方和$=0.0927\mathrm{m}$}\label{fig:real_traj_track_pos_x}
+\end{figure}
+（图\ref{fig:real_traj_track_pos_x}）为飞行器跟踪轨迹时$x$轴位移的响应。从图中曲线可以看出，跟踪轨迹时的效果相比单独给定位移目标值时的跟踪效果好，这是因为控制器中加入了前馈控制，在模型参数比较准确的情况下，加入前馈控制可以有效提高控制器的响应速度以及减少超调量。（图\ref{fig:real_traj_track_pos_y}）和（图\ref{fig:real_traj_track_pos_z}）为$y,z$轴跟踪效果，跟踪误差较小，飞行器的三维直线跟踪效果比较理想。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_traj_track_pos_y.jpg}
+  \caption{跟踪直线轨迹时$y$轴响应，误差平方和$=0.0997\mathrm{m}$}\label{fig:real_traj_track_pos_y}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_traj_track_pos_z.jpg}
+  \caption{跟踪直线轨迹时$z$轴响应，误差平方和$=0.0651\mathrm{m}$}\label{fig:real_traj_track_pos_z}
+\end{figure}
+\noindent（图\ref{fig:track_curve1}）为飞行器跟踪曲线轨迹的结果：
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{figures/track_curve1.jpg}
+  \caption{跟踪曲线轨迹实际结果}\label{fig:track_curve1}
+\end{figure}
+飞行时间为3s,从三维轨迹图看出，飞行器$z$轴跟踪误差稍大，$x,y$轴跟踪较好。（图\ref{fig:pos_error_when_track_curve1}）显示了各轴的误差，并给出了跟踪误差的平方和。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/pos_error_when_track_curve1.jpg}
+  \caption{实际跟踪曲线轨迹时的误差，误差平方和$x=0.0916\mathrm{m},y=0.0878\mathrm{m},z=0.1054\mathrm{m}$}\label{fig:pos_error_when_track_curve1}
+\end{figure}
+（图\ref{fig:real_aggressive_track_pos_x}）显示了飞行器进行高速直线跟踪时$x$轴的响应，路径长度为1m，完成时间为1s，跟踪时最大加速度达到$6\mathrm{m}/\mathrm{s}^{2}$，期间飞行器最大倾角约为$30^{\circ}$。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_aggressive_track_pos_x.jpg}
+  \caption{高速直线跟踪}\label{fig:real_aggressive_track_pos_x}
+\end{figure} 

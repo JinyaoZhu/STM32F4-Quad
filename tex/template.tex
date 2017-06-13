@@ -1,0 +1,141 @@
+%% Thesis Template of Wuhan University
+%% Author: Yu Lei
+%% Created Dec. 21, 2011
+%% Version: 1.0
+%% Required files: WHUthesis.cls, WHUthesis.cfg
+
+\documentclass[pdftex,notypeinfo]{WHUthesis}
+%% Set the path of chapters and figures.
+%\graphicspath{{chapter/}{figures/}}
+
+%\hypersetup{colorlinks=false}
+%\usepackage[numbers,sort&compress]{natbib}
+% ********************************************************************************参考文献设置
+%% 设置参考文献引用格式，如果需要用上标引用则用\citet或者\citep；
+%% 如果普通引用则直接使用\cite；
+\renewcommand{\citet}[1]{\textsuperscript{\cite{#1}}}
+\renewcommand{\citep}[1]{\textsuperscript{\cite{#1}}}
+\addtolength{\bibsep}{-0.5 em}
+\setlength{\bibhang}{2em}
+%\newcommand{\bibnumfont}[1]{\textit{#1}}
+\renewcommand{\bibfont}{\normalfont}
+%\renewcommand\bibnumfmt[1]{#1}  %去掉文末文献列表的[]（数字或上标模式）
+
+% ********************************************************************************章节靠左
+\CTEXsetup[format+={\centering}]{section}
+% ********************************************************************************包引用
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{longtable}
+\usepackage{threeparttable}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{verbatim}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{
+frame=shadowbox,
+basicstyle=\footnotesize
+}
+\usepackage{float}
+\usepackage{leftidx}
+
+% ********************************************************************************用户自定义符号
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 论文中矢量粗体缩写列表
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\To}{\rightarrow}
+\newcommand{\Real}{\mathbb R}
+\newcommand{\br}[1]{\left(#1\right)}
+\newcommand{\bbr}[1]{\{#1\}}
+\newcommand{\bx}{{\mbox{\boldmath$x$}}}
+\newcommand{\be}{\mbox{\boldmath$e$}}
+\newcommand{\bff}{\mbox{\boldmath$f$}}
+\newcommand{\by}{\mbox{\boldmath$y$}}
+\newcommand{\bv}{\mbox{\boldmath$y$}}
+\newcommand{\bw}{\mbox{\boldmath$w$}}
+\newcommand{\bz}{\mbox{\boldmath$z$}}
+\newcommand{\bI}{\mbox{\boldmath$I$}}
+\newcommand{\bp}{\mbox{\boldmath$p$}}
+\newcommand{\btheta}{\mbox{\boldmath$\theta$}}
+\newcommand{\bepsilon}{\mbox{\boldmath$\epsilon$}}
+\newcommand{\bmu}{\mbox{\boldmath$\mu$}}
+\newcommand{\bsigma}{\mbox{\boldmath$\sigma$}}
+\newcommand{\balpha}{\mbox{\boldmath$\alpha$}}
+\newcommand{\bpi}{\mbox{\boldmath$\pi$}}
+\newcommand{\bphi}{\mbox{\boldmath$\phi$}}
+\newcommand{\bone}{\mbox{\boldmath$1$}}
+\newcommand{\bA}{\mbox{\boldmath$A$}}
+\newcommand{\bPsi}{\mbox{$\Psi$}}
+\newcommand{\bPhi}{\mbox{$\Phi$}}
+\newcommand{\nn}[1]{{\langle #1 \rangle}}
+
+\newcommand{\bodyframe}{\mbox{\boldmath$\Gamma_{b}$}}
+\newcommand{\worldframe}{\mbox{\boldmath$\Gamma_{w}$}}
+\newcommand{\camoneframe}{\mbox{\boldmath$\Gamma_{cam1}$}}
+\newcommand{\camtwoframe}{\mbox{\boldmath$\Gamma_{cam2}$}}
+\newcommand{\matlab}{\mbox{$\mathrm{MATLAB}^{\circledR}$}}
+
+% ********************************************************************************文档开始
+\begin{document}
+% ********************************************************************************封面设计区
+% ********************************************************************************中文封面
+  \classification{}
+  \confidential{}
+  \UDC{}
+  \serialnumber{}
+  \title{室内自主飞行机器人的研究与设计}
+  \author{朱锦尧}
+  \advisor{王新怀}
+  \advisortitle{副教授}
+  \advisorinstitute{西安电子科技大学电子工程学院}
+  \major{电子信息工程}
+  \field{电磁波与微波}
+  \defenddate{\todaybig}
+  \institute{西安电子科技大学电子工程学院}
+%  \maketitle
+% ********************************************************************************英文封面
+  \englishtitle{Indoor Autonomous Flying Robot \\Research and Design}
+  \englishauthor{ZHU Jinyao}
+  \englishadvisor{WANG Xinhuai}
+  \englishinstitute{Electrical\&Information Engineering \\ Xidian University}
+  \englishdegree{Bachelor}
+  \englishmajor{Electrical\&Information Engineering}
+%  \makeenglishtitle
+% ********************************************************************************声明
+%  \makeclaim
+% ********************************************************************************授权书
+%  \makeauth
+\frontmatter
+% ********************************************************************************正文部分
+\bodyformat
+%  \include{chapter/novelty} % ------------------------创新点
+  \include{chapter/abstract}% ------------------------摘要
+  \tableofcontents          % ------------------------论文目录
+  \listoftables             % ------------------------表格目录
+  \listoffigures            % ------------------------图目录
+
+  \include{chapter/nomenclature}    % ----------------缩写列表
+\mainmatter
+    \include{chapter/chap-1}
+    \include{chapter/chap-2}
+    \include{chapter/chap-3}
+    \include{chapter/chap-4}
+    \include{chapter/chap-5}
+    \include{chapter/chap-6}
+    \include{chapter/chap-7}
+    \include{chapter/chap-thanks}       % ----------------致谢部分
+
+\appendix
+\include{chapter/appendix-1}
+\include{chapter/appendix-2}
+\include{chapter/appendix-3}
+% ********************************************************************************论文结尾部分
+\backmatter
+% ********************************************************************************参考文献
+\bibliographystyle{ieeetr}
+\bibliography{bib/all}
+\end{document}

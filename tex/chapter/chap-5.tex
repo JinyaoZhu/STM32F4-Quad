@@ -1,0 +1,453 @@
+\chapter{室内定位系统}\label{chap5}
+目前室内定位定位系统种类较多，文献\citet{Mautz2012}中对目前各类的室内定位系统进行了详细的介绍，比较，其中指出对于不同的应用场景，室内定位系统的性能要求差距甚大。学位论文\citet{Gaschler2011}中对基于标记物的运动跟踪系统进行了较详细的探讨，包括对摄像机的校正，标记点的定位，模型的匹配等问题。
+本设计的室内定位系统从基础的立体几何理论入手，实现三维空间的定位与姿态测量，系统能保证有较好的定位精度，较高的数据更新频率，以及系统有较高的鲁棒性，能够为飞行器提供高质量的反馈数据。
+\vskip 1ex
+\noindent本设计中基于双目红外摄像机的室内定位系统主要内容为以下几点：
+\begin{itemize}
+  \item 确定摄像机的内参数。
+  \item 确定图像坐标与地平面坐标的变换关系（齐次变换）。
+  \item 确定摄像机的空间坐标。
+  \item 标记物的提取。
+  \item 确定所有标记点的空间坐标。
+  \item 确定飞行器位移与姿态。
+\end{itemize}
+\section{摄像机校正}\label{chap5:sec1}
+定义摄像机1的坐标系为\camoneframe，摄像机2的坐标系为\camtwoframe，空间参考坐标系为\worldframe
+\subsection{内参数校正}
+摄像机的内参数校正在\matlab中的Camera Calibrator软件中利用棋盘法进行，校正后得到摄像机的内参数矩阵，以及镜头的径向和切向畸变系数。利用校正结果，可以得到校正后的图像像素坐标$\boldsymbol{m}$。
+\subsection{齐次变换}
+三维空间中某个坐标系中的点$\boldsymbol{M}$与其投影到另外一个坐标系中对应的点$\boldsymbol{M^{'}}$之间的关系可以由单应矩阵$\boldsymbol{H}$来描述：
+\begin{equation}\label{eq:3d_H_transfrom}
+  \left(
+  \begin{array}{c}
+  \boldsymbol{M^{'}}\\
+  1
+  \end{array}
+  \right)
+  =s\boldsymbol{H}
+     \left(
+       \begin{array}{c}
+         \boldsymbol{M} \\
+         1 \\
+       \end{array}
+     \right)
+\end{equation}
+其中：
+\begin{equation*}
+  \boldsymbol{H}=\left(
+                    \begin{array}{c}
+                   \begin{array}{cc}
+                     \boldsymbol{R_{3\times3}} & \boldsymbol{t_{3\times1}} \\
+                   \end{array}\\
+                   \begin{array}{cccc}
+                     0&0&0&1\\
+                   \end{array}
+                   \end{array}
+                 \right)
+\end{equation*}
+$\boldsymbol{H}$为一个$4\times4$的矩阵，其中包含一个旋转矩阵$\boldsymbol{R}$和平移矩阵$\boldsymbol{t}$，s为一个缩放系数。
+
+本小节的目标是将图像平面\camoneframe中的任意一点$\boldsymbol{m}$映射到\worldframe中$z_w=0$平面（即室内地面）上一点$\boldsymbol{M}$，该变换是二维点之间的映射（$m_z=0,M_z=0$）,由（式\ref{eq:3d_H_transfrom}）得：
+\begin{equation}\label{eq:2d_H_transfrom}
+\left(
+  \begin{array}{c}
+    M_x \\
+    M_y \\
+    1 \\
+  \end{array}
+\right)=s\left(
+           \begin{array}{ccc}
+             r_{11} & r_{12} & t_{11} \\
+             r_{21} & r_{22} & t_{21} \\
+             0      & 0       & 1     \\
+           \end{array}
+         \right)
+         \left(
+           \begin{array}{c}
+             m_x \\
+             m_y \\
+             1 \\
+           \end{array}
+         \right)
+\end{equation}
+该单应矩阵$\boldsymbol{H}$为一个$3\times3$的方阵，若把缩放系数也写进$\boldsymbol{H}$矩阵里，得到：
+\begin{equation*}
+  \left(
+  \begin{array}{c}
+    M_x \\
+    M_y \\
+    1 \\
+  \end{array}
+\right)=\boldsymbol{H}
+         \left(
+           \begin{array}{c}
+             m_x \\
+             m_y \\
+             1 \\
+           \end{array}
+         \right)
+\end{equation*}
+接下来需要求解$\boldsymbol{H}$矩阵，求解$\boldsymbol{H}$矩阵即求解一个线性方程组，由于测量噪声的存在，方程组的系数矩阵可能存在奇异的情况，造成方程组没有精确解，因此，需要使用最小二乘法或其它近似的方法来求解该方程组。\\
+OpenCV中提供了求解单应性矩阵的函数：
+\begin{lstlisting}[language=C]
+Mat findHomography(InputArray srcPoints,
+                   InputArray dstPoints,
+                   int method=0,
+                   double ransacReprojThreshold=3,
+                   OutputArray mask=noArray())
+\end{lstlisting}
+求解方法采用基于RANSAC的鲁棒方法：\verb|method = CV_RANSAC|。
+\newpage
+\noindent求取摄像机$\boldsymbol{H}$矩阵的具体过程如下：
+\begin{enumerate}
+  \item 如（图\ref{fig:cam_1_capture}）在地面上做标记，并且记录标记物在\worldframe中的坐标，图中的$1,2,3,4$标记为实际地面上边长为170cm的正方形的四个顶点，正方形的四边均与坐标轴平行，且其中心为坐标原点。
+  \item 识别图中标记物的图像坐标，可以通过特征提取，手动选择等方法获得4个标记物在图中的坐标，在本设计中是通过在标记物上放置红外发光点，并经过红外标记物提取后获得地面标记物的图像坐标。
+  \item 根据地面标记物的实际坐标与其一一对应的图像坐标，把对应点对输入到findHomography()函数中，获得摄像机的单应$\boldsymbol{H}$。
+\end{enumerate}
+对摄像机1，摄像机2进行相同的操作，获得矩阵$\boldsymbol{H_{1}}$和$\boldsymbol{H_{2}}$。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/cam1_view.jpg}
+  \caption{摄像机1图像}\label{fig:cam_1_capture}
+\end{figure}
+$\boldsymbol{H}$矩阵获得后，图像中的每一个像素可以与\worldframe中$z_{w}=0$平面上的点一一对应起来，即可以通过图像坐标来计算空间中任意一点$\boldsymbol{P}$在室内地面的投影的坐标$\boldsymbol{M}$（图\ref{fig:h_trans}）。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/h_trans.jpg}
+  \caption{地面投影的坐标}\label{fig:h_trans}
+\end{figure}
+\subsubsection*{变换结果}
+将摄像机1，摄像机2对应的图像进行齐次变换后（图\ref{fig:h_trans_result}），把得到的图像融合到一幅图上，得到（图\ref{fig:cam1_cam2_merge}）结果，可以看出图像1，2中相应的物体完全重合。
+\begin{figure}[!ht]
+\centering
+$
+\begin{array}{cc}
+  \includegraphics[width=0.45\textwidth]{figures/cam1_uncal.jpg}&\includegraphics[width=0.45\textwidth]{figures/cam1_cal.jpg}\\
+  (a)&(b) \\
+  \includegraphics[width=0.45\textwidth]{figures/cam2_uncal.jpg}&\includegraphics[width=0.45\textwidth]{figures/cam2_cal.jpg}\\
+  (c)&(d)
+\end{array}
+$
+\caption{(a)图像1变换前;(b)图像1变换后;(c)图像2变换前;(d)图像2变换后}\label{fig:h_trans_result}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/cam1_cam2_merge.jpg}
+  \caption{图像1，图像2融合}\label{fig:cam1_cam2_merge}
+\end{figure}
+
+\subsection{确定摄像机坐标}
+\subsubsection*{空间中两直线的交点}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/skew_line.jpg}
+  \caption{异面直线}\label{fig:skew_line}
+\end{figure}
+对于给定空间中的两条相交线$\boldsymbol{L_1}$和$\boldsymbol{L_2}$，可以通过联立方程组来求解两直线的交点，然而，在实际应用中，由于测量数据存在噪声与误差，测得的两直线往往不共面（图\ref{fig:skew_line}），导致两直线的交点没有精确解。因此需要将问题转化为：求空间中距离两直线最近的点。该问题的解决方法有多种，包括最小二乘法，二分法搜索，梯度法等，在本设计中采用立体几何的方法解决该问题：\\
+将空间中的直线以一个点与一个向量来表示，对于$\boldsymbol{L_1,L_2}$：
+\begin{eqnarray*}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{L_1} &=& \boldsymbol{p_1}+t_1\boldsymbol{d_1} \\
+  \boldsymbol{L_2} &=& \boldsymbol{p_2}+t_2\boldsymbol{d_2}
+\end{eqnarray*}
+其中$\boldsymbol{d_1,d_2}$为直线的方向向量：
+\begin{eqnarray*}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{d_1} &=& \boldsymbol{p^{'}_{1}-p_{1}} \\
+  \boldsymbol{d_2} &=& \boldsymbol{p^{'}_{2}-p_{2}}
+\end{eqnarray*}
+计算与$\boldsymbol{L_1,L_2}$垂直的向量$\boldsymbol{n}$：
+\begin{equation*}
+  \boldsymbol{n}=\boldsymbol{d_1}\times\boldsymbol{d_2}
+\end{equation*}
+$\boldsymbol{n}$的方向即为连接直线$\boldsymbol{L_1,L_2}$最短线段的方向。
+计算向量$\boldsymbol{n_1}$：
+\begin{equation*}
+  \boldsymbol{n_1}=\boldsymbol{d_2}\times\boldsymbol{n}
+\end{equation*}
+$\boldsymbol{n_1}$即为$\boldsymbol{d_2},\boldsymbol{n}$所在平面的法向量。\\
+以相同的方法计算$\boldsymbol{n_2}$：
+\begin{equation*}
+  \boldsymbol{n_2}=\boldsymbol{d_1}\times\boldsymbol{n}
+\end{equation*}
+得$\boldsymbol{d_1},\boldsymbol{n}$所在平面的法向量。\\
+得到$\boldsymbol{L_1}$上离$\boldsymbol{L_2}$最近的点的坐标$\boldsymbol{c_1}$：
+\begin{equation*}
+  \boldsymbol{c_1}=\boldsymbol{p_1}+\frac{\boldsymbol{(p_2-p_1)\cdot{n_2}}}{\boldsymbol{d_1\cdot{n_2}}}\boldsymbol{d_1}
+\end{equation*}
+同样得$\boldsymbol{L_2}$上离$\boldsymbol{L_1}$最近的点的坐标$\boldsymbol{c_2}$：
+\begin{equation*}
+  \boldsymbol{c_2}=\boldsymbol{p_2}+\frac{\boldsymbol{(p_1-p_2)\cdot{n_1}}}{\boldsymbol{d_2\cdot{n_1}}}\boldsymbol{d_2}
+\end{equation*}
+最后，取线段$\overline{c_1c_2}$的中点得到距离$\boldsymbol{L_1,L_2}$最近的点$\boldsymbol{c}$：
+\begin{equation*}
+  \boldsymbol{c}=\frac{\boldsymbol{c_1+c_2}}{2}
+\end{equation*}
+通过观察$\boldsymbol{c_{1},c_{2}}$的计算过程，可以发现只有在两直线平行时，该方法才会出现无解的情况。
+\subsubsection*{计算摄像机坐标}
+摄像机的空间坐标最少可以由通过两次测量获得：在摄像机可视区域内放置标记点，标记点的三维坐标为预先已知，或能手动测量，将标志点先后在两个不同的位置$\boldsymbol{p_{1},p_{2}}$放置，放置时记录摄像机经过齐次变换得到的标记点在地平面投影的坐标$\boldsymbol{p^{'}_{1},p^{'}_{2}}$，如（图\ref{fig:get_cam_pos}）。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/get_cam_pos.jpg}
+  \caption{计算摄像机坐标}\label{fig:get_cam_pos}
+\end{figure}
+
+由以上步骤可以得到两条直线$\boldsymbol{L_{1},L_{2}}$，利用上述求空间直线交点的方法求出$\boldsymbol{L_{1},L_{2}}$的交点即得摄像机的三维空间坐标$\boldsymbol{P_{cam}}$。摄像机1和摄像机2的坐标确定可以同时进行以加快标定过程，只需令标记点在其公共可视区域内放置。
+
+在实际应用中，若只在两个位置的采样，得到的结果往往误差较大，因此，可以稍作修改，通过2个以上的样本来确定摄像机的坐标。假设采集了$m$个位置的样本，得到了直线$\boldsymbol{L_{1}\ldots{L_{m}}}$，求出所有直线两两之间的交点，取其均值作为摄像机的坐标：
+\begin{equation*}
+  \boldsymbol{P_{cam}}=\frac{2}{m(m-1)}\sum_{i=1}^{m-1}\sum_{j=i+1}^{m}\mathrm{findIntersection}(\boldsymbol{L_{i},L_{j}}),(m\geq{2})
+\end{equation*}
+其中函数findIntersection()返回直线交点坐标。
+\section{标记点提取}\label{chap5:sec2}
+该步骤需要在摄像机返回的图像中识别出标记点的图像坐标，由于采用的是红外摄像机，镜头中的滤光片对非红外波段的电磁波进行了有效滤除，大大简化了特征提取算法的处理。本设计中标记物的提取相对简单，主要分三部分：
+\begin{itemize}
+  \item 图像降噪（二值化）。
+  \item 轮廓检测。
+  \item 特征点定位。
+\end{itemize}
+\subsubsection*{二值化}
+\noindent对图像中的所有像素进行以下操作：
+\begin{equation*}
+  I(x,y)=\left\{
+               \begin{array}{l}
+                 255, \\
+                 0, \\
+               \end{array}
+             \right.
+             \begin{array}{l}
+               I(x,y)>\mathrm{threshold} \\
+               else
+             \end{array}
+\end{equation*}
+其中，$I(x,y)$为图像坐标中$(x,y)$处的像素的亮度，threshold为二值化阈值。
+
+一般来说二值化可以采用动态阈值以适应更复杂的环境，但实际测试中原始图像噪声非常低，采用固定阈值已经能达到较好的效果，因此本设计中采用固定阈值。通过测试，图像二值化的阈值设置在100左右可以达到较好的效果。\\
+在OpenCV库中，提供了相应的二值化函数：
+\begin{lstlisting}[language=C]
+double threshold(InputArray src,
+                 OutputArray dst,
+                 double thresh,
+                 double maxval,
+                 int type );
+\end{lstlisting}
+\subsubsection*{提取轮廓}
+经过对图像二值化后，可以对图像中的标记点的轮廓进行提取，OpenCV中提供了提取轮廓的函数：
+\begin{lstlisting}[language=C]
+void findContours(InputOutputArray image,
+                  OutputArrayOfArrays contours,
+                  OutputArray hierarchy, int mode,
+                  int method,
+                  Point offset = Point());
+\end{lstlisting}
+函数返回了图像中所有的轮廓序列contours，配置参数为：
+\begin{verbatim}
+mode = CV_RETR_EXTERNAL, method = CV_CHAIN_APPROX_SIMPLE
+\end{verbatim}
+\subsubsection*{特征点定位}
+获取了所有特征点的轮廓（点的序列）后，可以利用特征点的轮廓来确定特征点在图像中的坐标，OpenCV中提供了函数minEnclosingCircle()来寻找一个能包围其所有输入的点的面积最小的圆形：
+\begin{lstlisting}[language=C]
+void minEnclosingCircle(InputArray points,
+                        CV_OUT Point2f& center,
+                        CV_OUT float& radius );
+\end{lstlisting}
+函数返回了该圆形的中心坐标$\boldsymbol{c}$与半径$r$，圆形的中心即为所要求的特征点在图像的坐标。
+\subsubsection*{提取结果}
+\begin{figure}[!ht]
+  \centering
+  $
+  \begin{array}{cc}
+    \includegraphics[width=0.45\textwidth]{figures/cam_src_frame.jpg} & \includegraphics[width=0.447\textwidth]{figures/cam_bin_frame.jpg}\\
+    (a)&(b)\\
+  \end{array}
+  $
+  \caption{标记点提取结果:(a)原图像;(b)二值化图像;}\label{fig:marker_pos}
+\end{figure}
+\section{确定空间坐标}\label{chap5:sec3}
+确定标记物空间坐标的方法可以采用类似确定摄像机坐标(\ref{chap5:sec1})中的方法，通过计算两个摄像机位置坐标与标记物在地上的投影点坐标连线所形成的交点，即得标记点的空间坐标，具体如下：
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.5\textwidth]{figures/marker_pos.jpg}
+  \caption{确定标记物空间坐标}\label{fig:marker_pos}
+\end{figure}
+（图\ref{fig:marker_pos}）中$\boldsymbol{P_{cam1},P_{cam2}}$为标定中获得的两个摄像机的空间坐标，$\boldsymbol{p^{'}_{1}},\boldsymbol{p^{'}_{2}}$分别为标记物相对于摄像机1和摄像机2，在地面上的投影的坐标，可以由（\ref{chap5:sec1}）中提到的单应矩阵获得。通过计算直线$\overline{P_{cam1}p^{'}_{1}}$和直线$\overline{P_{cam2}p^{'}_{2}}$的交点，可以得到标记物的空间坐标$\boldsymbol{p}$。
+\subsection{立体匹配}
+
+当双目摄像机可视区域内只有一个标记点时，可以直接利用上述的方法来确定标记点的空间坐标。然而，如果飞行器上只有一个标记点，室内定位系统只能得到飞行器三维位置坐标，并不能得到飞行器的姿态信息，在本设计中，飞行器上安装的标记物有三个标记点以确定飞行器的位置与姿态。图像中有多个特征点，需要涉及到立体匹配问题，立体匹配问题是立体视觉中比较重要的一个环节，主要任务就是对于两个摄像机看到的同一个点，在两个图像中建立起联系。一般来说，在立体视觉中会用极线约束配合其他特征匹配的算法进行立体匹配。通过极线约束（图\ref{fig:epi_polar}），排除了大部分非对应的点，可以把特征点的搜索范围从2维将为1维，大大提高了搜索的效率。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.5\textwidth]{figures/epi_polar.jpg}
+  \caption{极线约束}\label{fig:epi_polar}
+\end{figure}
+利用对极几何，可以将图像中的一点通过基本矩阵$\boldsymbol{F}$映射到另一幅图像中的一条直线，并且其对应点必在这条直线上。
+
+在实验中发现即使基于极线约束缩小了搜索范围，但在两极线距离很近的情况下，特征匹配这一步中成功率并不高，实验中采用了基于直方图相关性，亮度差的平方和（SSD）等算法，成功率大概在$50\%\sim60\%$，总体效果并不理想。
+\subsubsection*{基于标记物发光面积进行匹配}
+为了解决这个问题，采取了另外可靠性更强的方法，实验结果表明，该方法鲁棒性较高：在（\ref{chap5:sec2}）特征点定位这一步中，不但得到了标记点在图像中的坐标$\boldsymbol{c}$，还得到了最小包围圆的半径$r$，可以从这个半径入手进行特征匹配。实验中发现，该包围圆的半径与红外主动标记物的亮度成正相关关系，通过调整标记物的亮度，使每个标记物的亮度不一致，即可根据最小包围圆的半径来进行立体匹配。具体实现方法很简单，即对每个摄像机图像中的标记物根据最小包围圆的半径$r$进行排序，并编号，即可将两幅图像中的点对应起来。在实验中，该方法匹配的成功率接近$100\%$，并且可以通过$r$来筛选掉一些可能的干扰，算法的鲁棒性非常高。在本设计的应用当中，本方法能提高非常可靠的定位数据。
+
+然而，该方法也有一个比较明显的缺点，即当标记物过多时，匹配的成功率会下降，因为每一个标记物都要分一个亮度等级，并且亮度差异小会影响到匹配的成功率。但在本设计的应用中，依然是一个较为可靠的方法。
+\subsection{确定空间坐标}
+\subsubsection*{标记物的空间坐标}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/marker_on_body.jpg}
+  \caption{机体上的标记}\label{fig:marker_on_body}
+\end{figure}
+三个标记点在机体坐标上如（图\ref{fig:marker_on_body}）所示。图像经过上述几个步骤的处理后，已经可以得到飞行器上三个标记点的三维空间坐标。最后一步就是确定整个标记物的空间坐标，本设计中取标记点$\boldsymbol{p_2,p_3}$的中点$\boldsymbol{m}$作为标记物的中心，以表示标记物的的空间位置，其在\bodyframe中的坐标已知为$\boldsymbol{P_{b,m}}=\left(\begin{array}{ccc}
+       0 & 0 & h
+     \end{array}\right)^{\mathrm{T}}$，$\boldsymbol{m}$在\worldframe中的坐标$\boldsymbol{P_{w,m}}$可以如下计算：
+\begin{equation*}
+  \boldsymbol{P_{w,m}} =\frac{ \boldsymbol{p_2}+\boldsymbol{p_3}}{2}
+\end{equation*}
+\subsubsection*{飞行器的空间坐标}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/marker_to_pos.jpg}
+  \caption{由标记物坐标计算飞行器位移}\label{fig:marker_to_pos}
+\end{figure}
+明显地，$\boldsymbol{P_{w,m}}$不等于机体坐标原点$\boldsymbol{O_b}$在\worldframe中的坐标$\boldsymbol{r}$。此步骤，需要将$\boldsymbol{P_{w,m}}$转换为$\boldsymbol{r}$，如（图\ref{fig:marker_to_pos}）所示，要算$\boldsymbol{r}$只需要计算$\boldsymbol{P_{w,m}-P_{b,m}}$，但是，图中的$\boldsymbol{P_{b,m}}$为\bodyframe中的坐标，因此，需要把$\boldsymbol{P_{b,m}}$投影到\worldframe中，再进行计算，利用旋转矩阵的特性（式\ref{eq:rot_a_vec}）得：
+\begin{equation*}
+  \boldsymbol{r}=\boldsymbol{P_{w,m}}-\boldsymbol{\leftidx{^{w}}R_{b}}\boldsymbol{P_{b,m}}
+\end{equation*}
+\section{确定姿态}\label{chap5:sec4}
+设定位系统测得标记点1，标记点2，以及标记点2和标记点3的中点在\worldframe中的坐标$\boldsymbol{p_{1}},\boldsymbol{p_{2}}$和$\boldsymbol{m}$，向量$\boldsymbol{\hat{mp_{1}}},\boldsymbol{\hat{mp_{2}}}$为对应的单位方向向量，记为$\boldsymbol{\hat{d_1}},\boldsymbol{\hat{d_2}}$，其在\bodyframe中坐标分别为$\left(
+\begin{array}{ccc}
+  0 & 1 & 0 \\
+   \end{array}
+    \right)^T$和$\left(
+      \begin{array}{ccc}
+          1 & 0 & 0 \\
+      \end{array}
+      \right)^T$利用旋转矩阵可得：
+\begin{eqnarray}\label{eq:cam_att}
+  \boldsymbol{\hat{d_1}}&=&\boldsymbol{^{w}R_{b}}\left(
+  \begin{array}{c}
+    0 \\
+      1 \\
+        0 \\
+         \end{array}
+           \right)=\left(
+                     \begin{array}{c}
+                       \mathrm{c}\psi \mathrm{s}\theta \mathrm{s}\varphi-\mathrm{s}\psi \mathrm{c}\varphi \\
+                       \mathrm{s}\psi \mathrm{s}\vartheta \mathrm{s}\varphi+\mathrm{c}\psi \mathrm{c}\varphi \\
+                       \mathrm{c}\theta \mathrm{s}\varphi \\
+                     \end{array}
+                   \right) \\
+\boldsymbol{\hat{d_2}}&=&\boldsymbol{^{w}R_{b}}\left(
+  \begin{array}{c}
+    1 \\
+   0 \\
+    0 \\
+         \end{array}
+           \right)=\left(
+                     \begin{array}{c}
+                        \mathrm{c}\psi \mathrm{c}\theta \\
+                       \mathrm{s}\psi \mathrm{c}\theta  \\
+                       -\mathrm{s}\theta \\
+                     \end{array}
+                   \right)
+\end{eqnarray}
+观测以上两式可得定位系统测得的欧拉角$\boldsymbol{\Omega_{cam}}$：
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \varphi_{cam} &=& \mathrm{asin}(\frac{\hat{d}_{1,z}}{\cos(\theta)})\\
+  \theta_{cam} &=& -\mathrm{asin}(\hat{d}_{2,z}) \\
+  \psi_{cam} &=& \mathrm{atan}(\frac{\hat{d}_{2,y}}{\hat{d}_{2,x}})
+\end{eqnarray}
+在实际应用中反正切函数应该使用$\mathrm{atan2}(y,x)$函数，以使输出角度在$(-\pi,\pi)$范围。同时，注意到$\theta$的范围为$(-\frac{\pi}{2},\frac{\pi}{2})$而非$(-\pi,\pi)$，但实际上当飞行器横滚角旋转$90^{\circ}$后，标记物已被遮挡，因此在实际应用中影响不大。
+\section{测试结果}\label{chap5:sec5}
+本节中给出了室内定位系统的校正结果和测量数据与实际数据的差异，并给出了定位系统的覆盖区域。
+\subsection{校正结果}
+\noindent单应矩阵：
+\begin{equation*}
+  \boldsymbol{H_{1}}=\left(
+                       \begin{array}{ccc}
+                        0.0043  & 0.0002 & -1.6549\\
+                        0.0002  & -0.0058 &  1.3484\\
+                       -0.0000  & 0.0001  & 1.0000
+                       \end{array}
+                     \right)
+\end{equation*}
+\vskip 1ex
+\begin{equation*}
+    \boldsymbol{H_{2}}=\left(
+                       \begin{array}{ccc}
+                        0.0042 & -0.0004 & -1.8606 \\
+                        0.0007 & -0.0054 &  1.2387 \\
+                       -0.0003 &  0.0009 &  1.0000
+                       \end{array}
+                     \right)
+\end{equation*}
+摄像机位置坐标：
+\begin{equation*}
+\begin{array}{cc}
+  \boldsymbol{P_{cam,1}} = \left(
+   \begin{array}{c}
+     0.0112 \\
+    -2.8296 \\
+     3.0649
+  \end{array}
+  \right) &
+  \boldsymbol{P_{cam,2}} = \left(
+   \begin{array}{ccc}
+     -1.0143 \\
+     -2.8186 \\
+      3.0496
+     \end{array}
+     \right)
+\end{array}
+\end{equation*}
+\subsection{位移测量精度}
+在实验室中，利用卷尺测量实际位置，与定位系统测得的数据进行比较，大概估计定位系统的误差范围（表\ref{tab:optic_x_meas}）$\sim$（表\ref{tab:optic_z_meas}）。
+\begin{table}[!ht]
+  \centering
+    \begin{tabular}{|c||c|c|c|c|c|c|}
+    \hline
+          & \multicolumn{6}{c|}{$x$轴,$\sigma_{x}=0.0081\mathrm{m}$} \\
+    \hline
+    手工测量值(m)& -1.000 & -0.600 & -0.200 & 0.200 & 0.600 & 1.000 \\
+    \hline
+    定位系统测量值(m) & -1.003 & -0.610 & -0.207 & 0.206 & 0.598 & 1.011 \\
+    \hline
+    \end{tabular}%
+      \caption{定位系统$x$轴测量结果}
+  \label{tab:optic_x_meas}
+\end{table}
+\begin{table}[!ht]
+  \centering
+
+    \begin{tabular}{|c||c|c|c|c|c|c|}
+    \hline
+          & \multicolumn{6}{c|}{$y$轴,$\sigma_{y}=0.0268\mathrm{m}$} \\
+    \hline
+    手工测量值(m) & -1.000 & -0.600 & -0.200 & 0.200 & 0.600 & 1.000 \\
+    \hline
+    定位系统测量值(m) & -1.007 &-0.573 &-0.174 &0.222 &0.658 & 0.984 \\
+    \hline
+    \end{tabular}%
+      \caption{定位系统$y$轴测量结果}
+  \label{tab:optic_y_meas}
+\end{table}
+\begin{table}[H]
+  \centering
+    \begin{tabular}{|c||c|c|c|c|c|c|}
+    \hline
+          & \multicolumn{6}{c|}{$z$轴,$\sigma_{z}=0.0104\mathrm{m}$} \\
+    \hline
+    手工测量值(m) & 0.000 & 0.200 & 0.400 & 0.600 & 0.800 & 1.000 \\
+    \hline
+    定位系统测量值(m) & -0.011&0.190&0.413&0.597&0.799&0.983 \\
+    \hline
+    \end{tabular}
+      \caption{定位系统$z$轴测量结果}
+  \label{tab:optic_z_meas}
+\end{table}
+定位系统的精度依赖于校正过程，由测试结果可以看出定位的精度大概为$1\mathrm{cm}\sim2\mathrm{cm}$。并且根据上述定位原理可知，距离摄像机越近的区域，定位精度越高。
+
+\subsection{摄像机覆盖区域}
+\noindent（图\ref{fig:camera_region}）显示了该定位系统覆盖的空间区域。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{figures/camera_region.jpg}
+  \caption{摄像机覆盖空间区域}\label{fig:camera_region}
+\end{figure}

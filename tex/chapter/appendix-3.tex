@@ -1,0 +1,75 @@
+\chapter{由加速度计数据计算欧拉角}\label{appendix:get_euler_from_acc}
+在加速计只受重力加速度影响，忽略外力干扰的假设下，利用（附录\ref{appendix:euler}）中的旋转矩阵以及重力加速度常量$\left(\begin{array}{ccc}0 & 0 & -g \end{array}\right)^{\mathrm{T}}$，可以得到：
+\begin{equation*}
+  \left(
+    \begin{array}{c}
+      acc_{meas,x} \\
+      acc_{meas,y} \\
+      acc_{meas,z} \\
+    \end{array}
+  \right)
+   =
+  \boldsymbol{\leftidx{^b}R_{w}}
+  \left(
+    \begin{array}{c}
+      0 \\
+      0 \\
+      -g \\
+    \end{array}
+  \right)
+\end{equation*}
+即
+\begin{equation*}
+  \left(
+    \begin{array}{c}
+      acc_{meas,x} \\
+      acc_{meas,y} \\
+      acc_{meas,z} \\
+    \end{array}
+  \right)
+  =
+   \left(
+          \begin{array}{ccc}
+            \mathrm{c}\psi \mathrm{c}\theta & \mathrm{s}\psi \mathrm{c}\theta & -\mathrm{s}\theta \\
+            \mathrm{c}\psi \mathrm{s}\theta \mathrm{s}\varphi-\mathrm{s}\psi \mathrm{c}\varphi & \mathrm{s}\psi \mathrm{s}\vartheta \mathrm{s}\varphi+\mathrm{c}\psi \mathrm{c}\varphi & \mathrm{c}\theta \mathrm{s}\varphi\\
+            \mathrm{c}\psi \mathrm{s}\vartheta \mathrm{c}\varphi+\mathrm{s}\psi \mathrm{s}\varphi & \mathrm{s}\psi \mathrm{s}\theta \mathrm{c}\varphi-\mathrm{c}\psi \mathrm{s}\varphi & \mathrm{c}\theta \mathrm{c}\varphi\\
+          \end{array}
+        \right)
+   \left(
+    \begin{array}{c}
+      0 \\
+      0 \\
+      -g \\
+    \end{array}
+  \right)
+\end{equation*}
+其中$\boldsymbol{acc_{meas}}$为加速度计的测量值。\\
+简化得：
+\begin{equation}\label{eq:euler_from_acc_meas}
+  \left(
+    \begin{array}{c}
+      acc_{meas,x} \\
+      acc_{meas,y} \\
+      acc_{meas,z} \\
+    \end{array}
+  \right) = g
+  \left(
+    \begin{array}{c}
+      \sin(\theta) \\
+      -\cos(\theta)\sin(\varphi) \\
+      -\cos(\theta)\cos(\varphi) \\
+    \end{array}
+  \right)
+\end{equation}
+由（式\ref{eq:euler_from_acc_meas}）可以解得欧拉角：
+\begin{equation*}
+  \varphi = \mathrm{atan}(\frac{acc_{meas,y}}{acc_{meas,z}})
+\end{equation*}
+\begin{equation*}
+  \theta = -\mathrm{asin}(\frac{acc_{meas,x}}{g})
+\end{equation*}
+或
+\begin{equation*}
+  \theta = \mathrm{atan}(\frac{acc_{meas,x}}{\sqrt{acc^{2}_{meas,y}+acc^{2}_{meas,z}}})
+\end{equation*}
+

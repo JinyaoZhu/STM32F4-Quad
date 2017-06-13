@@ -1,0 +1,241 @@
+\chapter{路径规划}\label{chap6}
+路径规划在机器人进行自主控制时尤为重要。文献\citet{Hehn2011}中，对飞行器的轨迹生成方法进行了研究。文献\citet{Lupashin2010}中，考虑了飞行器进行高速翻滚时的路径规划问题。文献\citet{Flash1985}中，通过对于人类的运动轨迹观察，发现人类运动中符合加速度导数平方的积分最小的运动轨迹。文献\citet{Kawato1990}中发现，人类肢体的运动轨迹倾向于最小化力矩导数平方的积分。在四轴飞行器中，电机是飞行器的执行机构，在飞行器进行路径跟踪时，希望能够最小化电机的输出力矩，以让飞行器尽量平稳地飞行。
+
+一般来说，轨迹跟踪最简单的方法是依次向位移控制器输入目标位移，判断飞行器实际位移与目标位移的距离，当距离小于一定值后切换到下一个目标。该方法虽然能让飞行器依次经过所有的目标点，但是在跟踪过程中其路径的位移，速度，加速度并不连续，会使飞行器的动作非常不流畅，跟踪误差大，而且难以实现高速的路径跟踪。
+
+本章根据飞行器位移与电机输出的关系，讨论位移，速度，加速度以及加速度的导数均连续的路径的生成方法，并且构建代价函数，令所生成的路径满足一定的最优条件和约束条件。由于飞行器的三维路径互相独立，以下介绍的路径生成方法均只针对一维的路径，其他两个维度的路径可以使用完全相同的方法生成。文中讨论了两个生成最优路径的方法，分别有其优缺点。
+
+\section{欧拉-拉格朗日方程}
+\noindent对于给定的两个时间点$(t=a,b)$，设路径为函数$f(t)$，有以下代价函数：
+\begin{equation}\label{eq:cost_func}
+  J(f)=\int_{a}^{b}{\mathcal{L}(t,f,\dot{f},\ddot{f},\cdots,f^{(n)})}dt
+\end{equation}
+其中$\mathcal{L}$为$t,f$以及$f$的各阶导数$f^{(n)}$的函数。\\
+以上代价函数$J$取得极值的必要条件是$\mathcal{L}$符合欧拉-拉格朗日方程：
+\begin{equation}\label{eq:euler_lagrange}
+  \frac{\partial{\mathcal{L}}}{\partial{f}}-\frac{d}{dt}(\frac{\partial{\mathcal{L}}}{\partial{\dot{f}}})+\frac{d^2}{dt^2}(\frac{\partial{\mathcal{L}}}{\partial{\ddot{f}}})-\cdots+(-1)^{n}\frac{d^n}{dt^n}(\frac{\partial{\mathcal{L}}}{\partial{f^{(n)}}})=0
+\end{equation}
+为了给飞行器生成最优的路径，首先应该选取一个适当的代价函数。按照（\ref{chap3:sec2}）中设计的控制器，由（式\ref{eq:error_euler}），（式\ref{eq:angular_rate_control}），（式\ref{eq:pos_control_law}）以及（式\ref{eq:control_out_des_euler}），取小角度近似$(\theta\approx{0},\varphi\approx{0})$，可以得出以下结论：
+\begin{equation}\label{eq:r_and_m}
+\left.
+\begin{array}{c}
+  \boldsymbol{\ddot{r}_{des}}\propto\boldsymbol{\Omega_{des}} \\
+  \boldsymbol{\ddot{\Omega}_{des}}\propto\boldsymbol{\mathcal{M}_{des}}
+\end{array}\right\} \Rightarrow \boldsymbol{r^{(4)}_{des}}\propto \boldsymbol{\mathcal{M}_{des}}
+\end{equation}
+其中$\propto$表示成正比例关系。也就是说进行位移控制时，飞行器的力矩与给定的路径的四阶导成正比例关系，为了使飞行器进行路径跟踪时动作流畅，跟踪误差小，飞行姿态的抖动小，生成的路径应该要使控制器力矩输出尽量小。因此，可以选择以下代价函数：
+\begin{equation}\label{eq:traj_gen_cost_func}
+\begin{array}{c}
+  J(f)=\int_{a}^{b}{\mathcal{L}dt} \\
+  \mathcal{L}=(f^{(4)})^2
+\end{array}
+\end{equation}
+当$J$取得最小值时，$\mathcal{L}$应该服从欧拉-拉格朗日方程，将$\mathcal{L}$代入（式\ref{eq:euler_lagrange}）得：
+\begin{equation}\label{eq:mini_snap_condiction}
+  f^{(8)}=0
+\end{equation}
+即生成的最优路径所应该满足的条件。\\
+解以上微分方程可得7阶多项式：
+\begin{equation}\label{eq:single_traj_func}
+  f(t)=c_1+c_2t+c_3t^2+c_4t^3+c_5t^4+c_6t^5+c_7t^6+c_8t^7
+\end{equation}
+其中$c_1,c_2,\cdots c_8$为常数。
+\section{分段多项式插值}
+为了使用（式\ref{eq:single_traj_func}）生成路径，可以采用多段多项式连接给定的起点，终点和中间点（图\ref{fig:traj_gen}），使每一小段路径均满足最小化代价函数的条件。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/traj_gen.jpg}
+  \caption{分段多项式插值}\label{fig:traj_gen}
+\end{figure}
+生成路径时，给定路径经过的起始位置，中间位置，终点位置序列$w_{0},w_{1},w_{2},\cdots,w_{n}$，以及其对应的时间点$T_{0},T_{1},T_{2},\cdots,T_{n}$。\\
+生成的路径为如下形式：
+\begin{equation}\label{eq:traj_func}
+  f(t)=\left\{
+         \begin{array}{c}
+           f_1=\sum^{8}_{j=1}c_{1,j}t^{j-1}, \\
+           f_2=\sum^{8}_{j=1}c_{2,j}t^{j-1}, \\
+           \vdots \\
+           f_n=\sum^{8}_{j=1}c_{n,j}t^{j-1}, \\
+         \end{array}
+       \right.
+   \begin{array}{l}
+    T_0\leq t < T_1 \\
+    T_1\leq t < T_2 \\
+    \multicolumn{1}{c}\vdots \\
+    T_{n-1}\leq t < T_n
+  \end{array}
+\end{equation}
+可以看出上式含有$8n$个未知常数，可以通过给定边界条件，构建线性方程组来求解未知常数：
+
+首先，可以由已知的$w_{0},w_{1},w_{2},\cdots,w_{n}$和$T_{0},T_{1},T_{2},\cdots,T_{n}$得到以下$2n$个边界条件：
+\begin{equation}\label{eq:traj_waypoints_cons1}
+  \begin{array}{l}
+    f_{i}(T_{i-1})=w_{i-1}, \\
+    f_{i}(T_i)=w_i,
+  \end{array}
+  \begin{array}{l}
+    (i=1,2,\cdots,n) \\
+    (i=1,2,\cdots,n)
+  \end{array}
+\end{equation}
+再通过令路径在起点和终点时的$1\sim3$阶导数为零：
+\begin{equation}\label{eq:traj_waypoints_cons2}
+  f^{(k)}_{i}(T_i)=0,(k=1,2,3;i=0,n)
+\end{equation}
+得到6个边界条件。
+
+到此，还需要有$8n-2n-6=6(n-1)$个边界条件。由于路径在各个中间点前后是连续的，因此可以利用路径在中间点时的各阶导数建立边界条件。令路径在中间点的$1\sim6$阶导数连续，可以获得$6(n-1)$个边界条件：
+\begin{equation}\label{eq:traj_waypoints_cons3}
+  f^{(k)}_{i}(T_i)=f^{(k)}_{i+1}(T_i),(k=1,2,\cdots,6;i=1,2,\cdots,n-1)
+\end{equation}
+由（式\ref{eq:traj_waypoints_cons1}），（式\ref{eq:traj_waypoints_cons2}），（式\ref{eq:traj_waypoints_cons3}）一共获得$8n$个边界条件，构成线性方程组，即可得出每一段多项式的系数。
+
+采用上述方法，可以生成经过任意点的最优路径，路径生成速度较快，并且基本上不会出现无解的情况。然而，上述方法也存在缺点，就是给定的路径约束都是等式约束，即通过给定中间点的方式来给路径进行约束。在某些情况下，比如，希望飞行器穿过一个狭窄的隧道，仅仅依靠给定的中间点并不能保证飞行器的路径不与障碍物发生碰撞，因为在两个中间点之间的路径，没有加入任何的约束。
+
+\section{二次规划（QP）}
+在飞行器穿越障碍物时，若障碍物的位置已知，一条合理的路径应该能够在障碍物之间流畅地穿越，并且与障碍物保持一定的距离，简单来说就是希望生成的路径能控制在某一个空间范围内。这种情况下，可以看作是给生成的路径加入了不等式约束，而这种带不等式约束的优化问题，可以使用二次规划（QP）的方法来解决。\\
+二次规划问题可以归结为以下问题：
+\begin{equation}\label{eq:standar_qp}
+  \min\limits_{\boldsymbol{x}}\frac{1}{2}\boldsymbol{x}^{\mathrm{T}}\boldsymbol{Hx}+\boldsymbol{f}^{\mathrm{T}}\boldsymbol{x}
+\end{equation}
+$\boldsymbol{x}$满足以下边界条件：
+\begin{equation*}
+   \begin{array}{l}
+     \boldsymbol{Ax\leq b} \\
+     \boldsymbol{A_{eq}x=b_{eq}} \\
+     \boldsymbol{lb\leq x\leq ub}
+   \end{array}
+\end{equation*}
+即寻找满足条件的$\boldsymbol{x}$，使$\frac{1}{2}\boldsymbol{x}^{\mathrm{T}}\boldsymbol{Hx}+\boldsymbol{f}^{\mathrm{T}}\boldsymbol{x} $最小。
+
+类似上一节，给定路径的固定点之间可以用多项式进行连接，但是在使用QP方法进行路径规划中，并不需要多项式有特定的阶数，一般来说若多项式阶数太低在加入不等式约束后问题可能无解。阶数太高会导致运算时间过长，或者也会引起求解器不稳定。在本设计中使用了14阶多项式：\\
+\begin{equation}\label{eq:qp_traj_func}
+  f(t)=\left\{
+         \begin{array}{c}
+           f_1=\sum^{15}_{j=1}c_{1,j}t^{j-1}, \\
+           f_2=\sum^{15}_{j=1}c_{2,j}t^{j-1}, \\
+           \vdots \\
+           f_n=\sum^{15}_{j=1}c_{n,j}t^{j-1}, \\
+         \end{array}
+       \right.
+   \begin{array}{l}
+    T_0\leq t < T_1 \\
+    T_1\leq t < T_2 \\
+    \multicolumn{1}{c}{\vdots} \\
+    T_{n-1}\leq t < T_n
+  \end{array}
+\end{equation}
+应用QP来求解最优路径问题，令路径在起点和终点处$1\sim4$阶导数为0，中间点处$1\sim4$阶导数连续，得到以下优化问题：
+\begin{equation}\label{eq:traj_qp}
+  \min\limits_{f}\int_{T_0}^{T_n}{\{(\frac{d^4f_1}{dt^4})^2+(\frac{d^4f_2}{dt^4})^2+\cdots+(\frac{d^4f_n}{dt^4})^2\}dt}
+\end{equation}
+$f$服从边界条件：
+\begin{equation*}
+\begin{array}{c}
+ f_{i}(T_{i-1})=w_{i-1},\quad(i=1,2,\cdots,n) \\
+ f_{i}(T_i)=w_i,\quad(i=1,2,\cdots,n) \\
+ f^{(k)}_{i}(T_i)=0,\quad(k=1,2,3,4;i=0,n) \\
+ f^{(k)}_{i}(T_i)=f^{(k)}_{i+1}(T_i),\quad(k=1,2,3,4;i=1,2,\cdots,n-1)
+ \end{array}
+\end{equation*}
+令（式\ref{eq:standar_qp}）中的$\boldsymbol{x}$为路径多项式的系数：
+\begin{equation*}
+  \boldsymbol{x}=\left(
+                   \begin{array}{c}
+                     c_{1,1} \\
+                     c_{1,2} \\
+                     \vdots \\
+                     c_{1,15} \\
+                     \vdots \\
+                     c_{n,1} \\
+                     c_{n,2} \\
+                     \vdots \\
+                     c_{n,15} \\
+                   \end{array}
+                 \right)
+\end{equation*}
+根据$f$的边界条件，可以构造矩阵$\boldsymbol{H},\boldsymbol{A_{eq}}$和$\boldsymbol{b_{eq}}$，并令$\boldsymbol{f}$为$n\times1$全零列向量，求解该QP问题。若需要在某段路径限制在某个范围内，则可对相应的多项式（例如$f_{m}$）加入不等式约束加入不等式约束：
+\begin{equation*}
+  lb\leq f_{m}(t)\leq ub,\quad T_{m-1}\leq t \leq T_{m}
+\end{equation*}
+
+实际中若对$f_{m}(t)$中的所有时间点进行不等式约束，QP求解运算量将会很大，可以通过取$f_{m}$中等间隔的$N+1$个时间点进行约束：
+\begin{equation*}
+  lb\leq f_{m}(T_{m-1}+\frac{n}{N}(T_{m}-T_{m-1}))\leq ub,\quad (n=0,1,2,\cdots,N)
+\end{equation*}
+根据该不等式约束，可以构造相应的$\boldsymbol{A},\boldsymbol{b}$矩阵。
+
+以上介绍的两种方法都是基于用多项式进行插值，方法一直接利用边界条件构成线性方程组，运算量少，适应面较广，但不能进行不等式约束。利用QP方法进行路径生成，则可以进行不等式约束，适用于生成使飞行器穿越障碍物的最优路径，但是运算量较大，并且在实际应用中，当中间点个数较多时，会出现无解的情况，相对于方法一来说鲁棒性较低。
+
+\section{路径生成结果}
+\noindent路径生成过程在\matlab中进行，给定起点，终点与中间点序列为：
+\begin{equation*}
+  \boldsymbol{w}=\left(
+       \begin{array}{c}
+  \boldsymbol{w}_x \\
+   \boldsymbol{w}_y \\
+  \boldsymbol{w}_z \\
+   \end{array}
+    \right)=
+    \left(
+      \begin{array}{ccccc}
+        -0.75 & -0.5 & 0.5 & 0.75 \\
+        -0.5 & 0 & 0 & 0.5 \\
+        0.2 & 0.5 & 0.5 & 0.2 \\
+      \end{array}
+    \right)
+\end{equation*}
+求解3段7阶多项式中的24个系数后，生成路径如图（图\ref{fig:traj_gen_curve1}）。相应的三轴位移，速度，加速度如（图\ref{fig:traj_gen_curve1_xyz}）所示。
+\begin{figure}[H]
+  \centering
+  $
+  \begin{array}{cc}
+  \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1.jpg}&\includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_xy_plane.jpg}\\
+  (a)&(b)
+  \end{array}
+  $
+  \caption{使用分段多项式插值生成的路径,(a)三维视图;(b)$xy$平面轨迹}\label{fig:traj_gen_curve1}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  $
+  \begin{array}{c}
+  \begin{array}{cc}
+    \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_x.jpg} & \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_y.jpg} \\
+    (a)&(b)
+  \end{array}\\
+  \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_z.jpg} \\
+  (c)
+  \end{array}
+  $
+  \caption{(a)$x$轴数据;(b)$y$轴数据;(c)$z$轴数据；}\label{fig:traj_gen_curve1_xyz}
+\end{figure}
+\noindent应用QP方法，利用\matlab中的quadprog()函数，生成未加不等式约束的路径如（图\ref{fig:traj_gen_curve1_QP_no_constraint}）所示。
+\begin{figure}[H]
+  \centering
+  $
+  \begin{array}{cc}
+  \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_QP_no_constraint.jpg}&\includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_xy_plane_QP_no_constraint.jpg}\\
+  (a)&(b)
+  \end{array}
+  $
+  \caption{使用QP生成的路径(未加入不等式约束),(a)三维视图;(b)$xy$平面轨迹}\label{fig:traj_gen_curve1_QP_no_constraint}
+\end{figure}
+\noindent加入不等式约束，令第二段路径中：
+\begin{equation*}
+\begin{array}{c}
+  -0.01m\leq y \leq 0.01m \\
+  -0.49m\leq z \leq 0.51m
+\end{array}
+\end{equation*}
+得到（图\ref{fig:traj_gen_curve1_QP_constraint}）的结果。
+\begin{figure}[H]
+  \centering
+  $
+  \begin{array}{cc}
+  \includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_QP_constraint.jpg}&\includegraphics[width=0.46\textwidth]{figures/traj_gen_curve1_xy_plane_QP_constraint.jpg}\\
+  (a)&(b)
+  \end{array}
+  $
+  \caption{使用QP生成的路径(加入不等式约束),(a)三维视图;(b)$xy$平面轨迹}\label{fig:traj_gen_curve1_QP_constraint}
+\end{figure} 

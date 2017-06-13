@@ -1,0 +1,535 @@
+\chapter{状态估计}\label{chap4}
+状态估计为闭环控制系统的一个重要的环节，反馈信号的噪声，延迟对控制系统的性能有着重要的影响。文献\citet{Heng2011}\citet{Shen2011}\citet{Bachrach2009}中对利用机载传感器进行飞行器状态估计的问题进行了研究。四轴飞行器进行状态估计，可以由四轴飞行器的运动方程（式\ref{eq:state_space_eq}）入手，从飞行器的运动方程可以看出，飞行器的状态为一个12维的列向量，也就是说要按照第\ref{chap2}章中的方法，实现对飞行器的姿态以及位移进行控制需要设计一个状态估计器来估计这12个状态。\\
+另外，飞行器上的传感器，以及室内定位系统能提供以下几个数据：
+\begin{itemize}
+  \item 陀螺仪：飞行器的三维角速度$\boldsymbol{\omega_{meas}}$
+  \item 加速度计：\bodyframe中测得的加速度$\boldsymbol{acc_{meas}}$
+  \item 室内定位系统：飞行器在\worldframe中的位移$\boldsymbol{r_{meas}}$，以及飞行器的姿态$\boldsymbol{\Omega_{cam}}$
+\end{itemize}
+一般来说，利用飞行器的运动方程（式\ref{eq:state_space_eq}），把传感器数据以及室内定位系统作为观测量，可以构建扩展卡尔曼滤波器（EKF），对运动方程中的12个状态以及各传感器误差进行在线估计。然而，滤波器中有12个以上的状态（比如加入对陀螺仪及加速度计的零偏进行估计，一共18个状态），其状态误差的协方差矩阵$P$为一个$18\times18$的方阵，对矩阵进行求逆运算时运算量非常大（对于单片机来说），此外，对系统状态进行线性化时同样占用较大的运算时间，要在单片机上以几百Hz的频率运行一个十几维的EKF进行在线状态估计不太现实（实验中进行一次12维的EKF更新，运算时间大概4ms）。因此，本设计中，为了得到较小的估计误差，以及较高的更新频率，主要做了以下处理：
+\begin{itemize}
+  \item 通过实验测试发现，经过低通滤波(截至频率42Hz)后陀螺仪的数据噪声较低，动态性能非常好，但是存在零点漂移，因此可以用去掉零偏的陀螺仪数据作为控制器的角速度反馈，不再作为被估计的状态。即：
+      \begin{equation*}\boldsymbol{\omega}=\mathrm{DLPF}(\boldsymbol{\omega_{meas}})-\boldsymbol{b_{\omega}}\end{equation*}
+  \item 将整个飞行器的状态估计问题分为姿态估计问题和位移估计问题。
+  \item 姿态估计中设计次优的KF。
+  \item 位移估计中应用KF。
+\end{itemize}
+\section{姿态估计}
+\noindent由（式\ref{eq:state_space_eq}）有：
+\begin{equation}\label{eq:att_state_trans}
+  \boldsymbol{\dot{\Omega}}=\boldsymbol{W}\boldsymbol{\omega}=\left(
+  \begin{array}{ccc}
+  1 & \tan(\theta)\sin(\varphi) & \tan(\theta)\cos(\varphi) \\
+  0 & \cos(\varphi) & -\sin(\varphi) \\
+  0 & \sec(\theta)\sin(\varphi) & \sec(\theta)\cos(\varphi) \\
+  \end{array}
+  \right)
+  \left(
+    \begin{array}{c}
+      \omega_{x} \\
+      \omega_{y} \\
+      \omega_{z} \\
+    \end{array}
+  \right)
+\end{equation}
+离散化后得到：
+\begin{equation}\label{eq:state_space_eq_descrete}
+  \begin{array}{c}
+  \boldsymbol{\Omega_{k}}=\boldsymbol{I_{3\times3}}\boldsymbol{\Omega_{k-1}}+dt\boldsymbol{W(\Omega_{k-1})}\boldsymbol{\omega_{k-1}}
+  \end{array}
+\end{equation}
+其中$\boldsymbol{I_{3\times3}}$为$3\times3$的单位矩阵，$dt$为采样周期。\\
+\subsection{状态转移方程}
+\noindent设陀螺仪模型为：
+\begin{equation*}
+  \boldsymbol{\omega_{meas}} = \boldsymbol{\omega}+\boldsymbol{b_{\omega}}+\boldsymbol{w_{\omega}}
+\end{equation*}
+其中$\boldsymbol{b_{\omega}}$为陀螺仪零偏，假设为常数。$\boldsymbol{w_{\omega}}$为陀螺仪测量噪声，假设每个轴的噪声独立并服从零均值高斯分布：
+\begin{equation*}
+\begin{array}{c}
+  w_{\omega,i}\sim\mathcal{N}(0,\sigma_{\omega}),(i=x,y,z) \\
+  E(w_{\omega,i}w_{\omega,j})=0,(i=x,y,z;j=x,y,z;i\neq{j})
+\end{array}
+\end{equation*}
+$\sigma_{\omega}$为陀螺仪噪声的标准差。\\
+令不包含噪声的陀螺仪测量值为：$\boldsymbol{\omega^{'}_{meas}} = \boldsymbol{\omega}+\boldsymbol{b_{\omega}}$。\\
+令状态量为：
+\begin{equation}\label{eq:att_state}
+  \boldsymbol{x}=\left(
+                   \begin{array}{c}
+                     \boldsymbol{\Omega} \\
+                     \boldsymbol{b_{\omega}} \\
+                   \end{array}
+                 \right)=
+                 \left(
+                   \begin{array}{c}
+                     \varphi \\
+                     \theta \\
+                     \psi \\
+                     b_{\omega,x} \\
+                     b_{\omega,y} \\
+                     b_{\omega,z} \\
+                   \end{array}
+                 \right)
+\end{equation}
+根据（式\ref{eq:state_space_eq_descrete}），建立状态方程：
+\begin{equation}\label{eq:att_kf_trans_func}
+  \boldsymbol{x_{k}}=f(\boldsymbol{x_{k-1},\omega^{'}_{meas,k-1},w_{\omega,k-1}})
+\end{equation}
+\begin{equation*}
+\begin{array}{c}
+  f(\boldsymbol{x_{k-1},\omega^{'}_{meas,k-1},w_{\omega,k-1}})= \\
+
+   \left(
+   \begin{array}{c}
+   \boldsymbol{I_{3\times3}}\boldsymbol{\Omega_{k-1}}+dt\boldsymbol{W(\Omega_{k-1})}(\boldsymbol{\omega^{'}_{meas,k-1}-b_{\omega,k-1}+w_{\omega,k-1}}) \\
+    \boldsymbol{b_{\omega,k-1}}
+     \end{array}
+     \right)
+
+\end{array}
+\end{equation*}
+\subsection{测量方程}
+\noindent观测量如下：
+\begin{equation*}
+  \boldsymbol{y}=\left(
+                   \begin{array}{c}
+                     \boldsymbol{\Omega_{acc}} \\
+                     \boldsymbol{\Omega_{cam}} \\
+                   \end{array}
+                 \right)=
+                 \left(
+                   \begin{array}{c}
+                     \varphi_{acc} \\
+                     \theta_{acc} \\
+                     \varphi_{cam} \\
+                     \theta_{cam} \\
+                     \psi_{cam} \\
+                   \end{array}
+                 \right)
+\end{equation*}
+其中$\boldsymbol{\Omega_{acc}}$和$\boldsymbol{\Omega_{cam}}$分别为加速度计与室内定位系统测得的欧拉角，由于加速度计的特点，加速度计只能测得$\varphi$角度和$\theta$角度（附录\ref{appendix:get_euler_from_acc}）。\\
+测量方程为：
+\begin{equation}\label{eq:att_measure_func}
+  \boldsymbol{y}=\boldsymbol{Hx+v}=\left(
+                                   \begin{array}{cccccc}
+                                     1 & 0 & 0 & 0 & 0 & 0\\
+                                     0 & 1 & 0 & 0 & 0 & 0\\
+                                     1 & 0 & 0 & 0 & 0 & 0\\
+                                     0 & 1 & 0 & 0 & 0 & 0\\
+                                     0 & 0 & 1 & 0 & 0 & 0\\
+                                   \end{array}
+                                 \right)\left(
+                   \begin{array}{c}
+                     \varphi \\
+                     \theta \\
+                     \psi \\
+                     b_{\omega,x} \\
+                     b_{\omega,y} \\
+                     b_{\omega,z} \\
+                   \end{array}
+                 \right)+\left(
+                           \begin{array}{c}
+                             v_{\Omega,acc} \\
+                             v_{\Omega,acc} \\
+                             v_{\Omega,cam} \\
+                             v_{\Omega,cam} \\
+                             v_{\Omega,cam} \\
+                           \end{array}
+                         \right)
+\end{equation}
+$\boldsymbol{v}$为测量噪声，为包含5个元素的列向量，并假设测量噪声为零均值独立的高斯白噪声：
+\begin{equation*}
+\begin{array}{c}
+  v_{\Omega,acc}\sim\mathcal{N}(0,\sigma_{\Omega,acc}) \\
+  v_{\Omega,cam}\sim\mathcal{N}(0,\sigma_{\Omega,cam})
+\end{array}
+\end{equation*}
+测量噪声协方差矩阵为：
+\begin{equation}\label{eq:att_kf_R_matrix}
+  \boldsymbol{R}=E(\boldsymbol{vv^{\mathrm{T}}})
+\end{equation}
+\subsection{次优KF}
+若直接利用状态转移方程（式\ref{eq:att_kf_trans_func}）进行状态估计，则需要采用EKF等复杂的非线性状态估计算法，在EKF对状态转移方程进行线性化步骤中，需要求解偏微分矩阵$\frac{\partial{f}}{\partial{\boldsymbol{x}}}$和$\frac{\partial{f}}{\partial{\boldsymbol{w_{\omega}}}}$，由于矩阵$\boldsymbol{W}$中涉及大量三角函数，EKF线性化过程的运算量将非常大，不利于高频率运行，并且滤波器的鲁棒性也不高。因此，接下来的讨论，将简化状态转移方程，进而设计次优的状态估计器，大大减少状态估计过程的运算量。\\
+对方程（式\ref{eq:att_kf_trans_func}），利用假设$\varphi\approx0$，$\theta\approx0$，可简化为：
+\begin{equation*}
+   \boldsymbol{x_k}=\left(
+   \begin{array}{c}
+   \boldsymbol{I_{3\times3}}\boldsymbol{\Omega_{k-1}}+dt(\boldsymbol{\omega^{'}_{meas,k-1}-b_{\omega,k-1}+w_{\omega,k-1}}) \\
+    \boldsymbol{b_{\omega,k-1}}
+     \end{array}
+     \right)
+\end{equation*}
+进一步写成一般线性系统的形式：
+\begin{equation}\label{eq:att_approx_state_trans_func}
+  \boldsymbol{x_k}=\boldsymbol{Fx_{k-1}+Gu_{k-1}}+\boldsymbol{w_{k-1}}
+\end{equation}
+其中：
+\begin{equation*}
+     \boldsymbol{F}=\left(
+                      \begin{array}{cccccc}
+                        1 & 0 & 0 & -dt & 0 & 0 \\
+                        0 & 1 & 0 & 0 & -dt & 0 \\
+                        0 & 0 & 1 & 0 & 0 & -dt \\
+                        0 & 0 & 0 & 1 & 0 & 0 \\
+                        0 & 0 & 0 & 0 & 1 & 0 \\
+                        0 & 0 & 0 & 0 & 0 & 1 \\
+                      \end{array}
+                    \right),
+     \boldsymbol{G}= \left(
+                       \begin{array}{c}
+                         dt \\
+                         dt \\
+                         dt \\
+                         0 \\
+                         0 \\
+                         0 \\
+                       \end{array}
+                     \right),
+     \boldsymbol{u}=\left(
+                       \begin{array}{c}
+                         \omega^{'}_{meas,x} \\
+                         \omega^{'}_{meas,y} \\
+                         \omega^{'}_{meas,z} \\
+                         0 \\
+                         0 \\
+                         0 \\
+                       \end{array}
+                     \right)
+\end{equation*}
+过程噪声的协方差矩阵$\boldsymbol{Q}$为：
+\begin{equation}\label{eq:att_kf_Q_matrix1}
+  \boldsymbol{Q}=\left(
+                   \begin{array}{cc}
+                     E(\boldsymbol{w_{\omega}w_{\omega}^{\mathrm{T}}}) & \boldsymbol{O_{3\times3}} \\
+                      \boldsymbol{O_{3\times3}} &  \boldsymbol{O_{3\times3}} \\
+                   \end{array}
+                 \right)
+\end{equation}
+其中$\boldsymbol{O_{3\times3}}$为$3\times3$全零矩阵。\\
+注意（式\ref{eq:att_kf_Q_matrix1}）为连续系统中的协方差矩阵，其对应得离散系统中的协方差矩阵为：
+\begin{equation*}
+  \boldsymbol{Q}_k=\int_{0}^{dt}{\boldsymbol{FQF^{\mathrm{T}}dt}}
+\end{equation*}
+在采样间隔很小时，可以近似为：
+\begin{equation*}
+  \boldsymbol{Q}_k=dt\boldsymbol{Q}
+\end{equation*}
+利用(式\ref{eq:att_approx_state_trans_func})(式\ref{eq:att_kf_Q_matrix1})(式\ref{eq:att_measure_func})和(式\ref{eq:att_kf_R_matrix})，递推求解Riccati方程：
+\begin{eqnarray}\label{eq:recursive_riccati}
+  \boldsymbol{M_k}&=&\boldsymbol{FP_{k-1}F^{\mathrm{T}}+Q_k}  \nonumber\\
+  \boldsymbol{K_k}&=&\boldsymbol{M_kH^{\mathrm{T}}(HM_kH^{\mathrm{T}}+R_k)^{-1}}  \\
+  \boldsymbol{P_k}&=&\boldsymbol{(I-K_kH)M_k}  \nonumber
+\end{eqnarray}
+其中$\boldsymbol{P}$为状态误差的协方差矩阵，$\boldsymbol{M}$为先验估计得到的状态误差的协方差矩阵，即未考虑测量方程时的$\boldsymbol{P}$矩阵。
+$\boldsymbol{K}$为KF的增益。\\
+\noindent整个姿态估计KF过程为：
+\begin{eqnarray}\label{eq:att_kf_step}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{x^{-}_{k}} &=& \boldsymbol{Fx^{+}_{k-1}+Gu_{k-1}} \nonumber\\
+  \boldsymbol{M_k} &=& \boldsymbol{FP_{k-1}F^{\mathrm{T}}+Q_k} \nonumber\\
+  \boldsymbol{K_k} &=& \boldsymbol{M_kH^{\mathrm{T}}(HM_kH^T+R_k)^{-1}} \\
+  \boldsymbol{x^{+}_{k}} &=& \boldsymbol{x^{-}_{k}+K_k(y_k-Hx^{-}_{k})} \nonumber\\
+  \boldsymbol{P_k} &=& \boldsymbol{(I_{6\times6}-K_kH)M_k} \nonumber
+\end{eqnarray}
+其中$\boldsymbol{x^{-}_{k}}$为先验估计的状态，$\boldsymbol{x^{+}_{k}}$是引入测量后的后验估计。\\
+
+注意到，在第一步计算先验估计$\boldsymbol{x^{-}_{k}}$中，直接利用了线性化的$\boldsymbol{F}$进行状态转移，在飞行器偏离悬停状态较大时，或者瞬间加速时，模型误差会比较大，造成先验估计的误差比较大。在KF中，模型的准确性对滤波器的性能有重要的影响，因此，在第一步应该采用非线性模型（式\ref{eq:att_kf_trans_func}）计算先验估计，得到如下的估计流程：
+\begin{eqnarray*}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{x^{-}_{k}} &=& f(\boldsymbol{x^{+}_{k-1},\omega_{meas,k-1},O_{3\times1}}) \\
+  \boldsymbol{M_k} &=& \boldsymbol{FP_{k-1}F^{\mathrm{T}}+Q_k} \\
+  \boldsymbol{K_k} &=& \boldsymbol{M_kH^{\mathrm{T}}(HM_kH^{\mathrm{T}}+R_k)^{-1}} \\
+  \boldsymbol{x^{+}_{k}} &=& \boldsymbol{x^{-}_{k}+K_k(y_k-Hx^{-}_{k})} \\
+  \boldsymbol{P_k} &=& \boldsymbol{(I_{6\times6}-K_kH)M_k}
+\end{eqnarray*}
+需要注意，在实际中，由于观测数据的更新周期往往与状态转移的周期不一样，对应的$\boldsymbol{H}$矩阵也应相应改变。
+
+再进一步观察可以看出，递推求解Riccati方程（式\ref{eq:recursive_riccati}）时与$\boldsymbol{\omega_{meas}}$和$\boldsymbol{y}$无关，若$\boldsymbol{Q},\boldsymbol{R}$矩阵在滤波器运行过程中为常数，递推求解Riccati方程实际上可以离线运行，取其稳态解得到滤波器稳态增益$\boldsymbol{K_{\infty}}$，滤波器进一步简化为：
+\begin{eqnarray}\label{eq:att_kf_suboptimal_update}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{x^{-}_{k}} &=& f(\boldsymbol{x^{+}_{k-1},\omega_{meas,k-1},O_{3\times1}}) \\
+  \boldsymbol{x^{+}_{k}} &=& \boldsymbol{x^{-}_{k}+K_{\infty}(y_k-Hx^{-}_{k})}
+\end{eqnarray}
+\section{位移估计}
+若姿态估计完成，则可以得到估计的飞行器的欧拉角$\boldsymbol{\hat{\Omega}}$，在位移估计步骤中假设姿态估计的欧拉角$\boldsymbol{\hat{\Omega}}$为真实欧拉角$\boldsymbol{\Omega}$，即$\boldsymbol{\hat{\Omega}}=\boldsymbol{\Omega}$，由（式\ref{eq:rot_a_vec}）可以把\bodyframe中的加速度投影到\worldframe中：
+\begin{equation*}
+  \boldsymbol{a_w}=\boldsymbol{\leftidx{^{w}}R_{b}a_b}
+\end{equation*}
+令三轴加速度计的测量值为$\boldsymbol{a_{meas}}$，并将其投影到\worldframe，减去重力加速度常量$\boldsymbol{g}$，得到飞行器在\worldframe中的加速度测量值$\boldsymbol{\ddot{r}_{meas}}$：
+\begin{equation*}
+  \boldsymbol{\ddot{r}_{meas}}=\boldsymbol{-\leftidx{^{w}}R_{b}}\boldsymbol{a_{meas}}-\boldsymbol{g}
+\end{equation*}
+
+由于三个坐标轴$x_w,y_w,z_w$相互独立，采用KF对飞行器位移进行估计时，可以分别对每个坐标轴的位移，速度等的状态估计应用相同结构的KF，因此以下就其中一个坐标轴来设计KF。
+\subsection{状态转移方程}
+\noindent令位移估计KF的状态量为：
+\begin{equation*}
+  \boldsymbol{x}=\left(
+                   \begin{array}{c}
+                     r \\
+                     \dot{r} \\
+                     b_{\ddot{r}} \\
+                   \end{array}
+                 \right)
+\end{equation*}
+其中$r,\dot{r},b_{\ddot{r}}$分别为飞行器在\worldframe中的位移，速度，以及加速度测量值的零偏。\\
+状态转移方程为：
+\begin{equation}\label{eq:pos_state_trans_func}
+  \boldsymbol{x_{k}}=\boldsymbol{Fx_{k-1}}+\boldsymbol{Gu_{k-1}}+\boldsymbol{w_{k-1}}
+\end{equation}
+其中：
+\begin{equation*}
+  \boldsymbol{F}=\left(
+                   \begin{array}{ccc}
+                     1 & dt & -\frac{1}{2}dt^2 \\
+                     0 & 1 & -dt \\
+                     0 & 0 & 1 \\
+                   \end{array}
+                 \right),
+  \boldsymbol{G}=\left(
+                   \begin{array}{c}
+                     \frac{1}{2}dt^2 \\
+                     dt \\
+                     0 \\
+                   \end{array}
+                 \right),
+  \boldsymbol{u}=\ddot{r}_{meas}
+\end{equation*}
+$\boldsymbol{w}$为过程噪声，为加速度测量值引入的高斯白噪声，均值为零，标准差为$\sigma_{\ddot{r}}$，并且假设测量值的零偏$b_{\ddot{r}}$为常量，过程噪声协方差为：
+\begin{equation}\label{eq:pos_kf_Q_matrix}
+  \boldsymbol{Q}=E(\boldsymbol{ww^{\mathrm{T}}})
+\end{equation}
+\subsection{测量方程}
+\noindent测量值为室内定位系统返回的对应坐标轴的位移信息：
+\begin{equation}\label{eq:pos_kf_y}
+  y=r_{cam}
+\end{equation}
+测量方程为：
+\begin{equation}\label{eq:pos_kf_meas_func}
+  y=\boldsymbol{Hx}+v_{r,cam}
+\end{equation}
+其中：
+\begin{equation*}
+  \boldsymbol{H} = \left(
+  \begin{array}{ccc}
+      1 & 0 & 0 \\
+        \end{array}
+   \right)
+\end{equation*}
+$v_{r,cam}$为室内定位系统测量数据的噪声，假设为零均值高斯白噪声，标准差为$\sigma_{r,cam}$，方差为：
+\begin{equation}\label{eq:pos_kf_R_matrix}
+  R = E(vv^T)=\sigma_{r,cam}^{2}
+\end{equation}
+最后，由（式\ref{eq:pos_state_trans_func}）（式\ref{eq:pos_kf_Q_matrix}）（式\ref{eq:pos_kf_meas_func}）和（式\ref{eq:pos_kf_R_matrix}），根据KF算法进行飞行器的位移估计：\begin{eqnarray}\label{eq:pos_kf_step}
+% \nonumber to remove numbering (before each equation)
+  \boldsymbol{x_{k}}&=&\boldsymbol{Fx_{k-1}}+\boldsymbol{Gu_{k-1}}+\boldsymbol{w_{k-1}} \nonumber\\
+  \boldsymbol{M_k} &=& \boldsymbol{FP_{k-1}F^{\mathrm{T}}+Q_k} \nonumber\\
+  \boldsymbol{K_k} &=& \boldsymbol{M_kH^{\mathrm{T}}}(\boldsymbol{HM_kH^{\mathrm{T}}}+R_k)^{-1}\\
+  \boldsymbol{x^{+}_{k}} &=& \boldsymbol{x^{-}_{k}}+\boldsymbol{K_k}(y_k-\boldsymbol{Hx^{-}_{k}}) \nonumber\\
+  \boldsymbol{P_k} &=& \boldsymbol{(I_{3\times3}-K_kH)M_k} \nonumber
+\end{eqnarray}
+在实际中，由于观测数据的更新周期往往与状态转移的周期不一样，对应的$\boldsymbol{H}$矩阵也应相应改变。
+
+\section{测量延迟}
+在第\ref{chap2}章\ref{chap2:meas_delay}中提到，由于摄像机感光元件曝光，数据传输和处理，无线通信等原因，室内定位系统的反馈数据存在40ms左右的延迟。对于控制系统来说，反馈数据的延迟会使控制系统的鲁棒性下降，容易引起系统振荡。
+
+通过仿真发现定位系统的数据延迟对飞行器的速度估计影响尤为明显，在实验中发现若直接使用带延迟的测量来估计飞行器状态，飞行器依然能完成悬停，路径跟踪等任务，但是在飞行器需要产生较大线加速度（倾斜角度大）时系统容易振荡，甚至发散。
+
+（图\ref{fig:vel_error_without_meas_delay}）为仿真环境中无测量延迟情况下的飞行器速度估计误差，（图\ref{fig:vel_error_with_meas_delay}）为加入测量延迟40ms时的速度估计误差，从结果可以看出，由于测量延迟的引入，速度估计误差明显增大。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/vel_error_without_meas_delay.jpg}
+  \caption{无测量延迟时的速度估计误差}\label{fig:vel_error_without_meas_delay}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/vel_error_with_meas_delay.jpg}
+  \caption{有测量延迟时的速度估计误差}\label{fig:vel_error_with_meas_delay}
+\end{figure}
+
+为尽量避免由测量延迟引入的额外的噪声，应该对状态估计器做相应的修改。实验测试中发现，测量数据的延迟基本是一个常量，因此在这里假设测量延迟固定。
+
+考虑如（式\ref{eq:pos_state_trans_func}）的线性系统，假设当前时刻为$k$，实际测量时刻为$k_{0}$，由当前的状态$\boldsymbol{x_{k}}$以及$k_{0}\sim k-1$时刻记录下的控制量$\boldsymbol{u_{j}},(j = k_{0},\cdots,k-1)$利用下式，可以追溯到$k_{0}$时刻的状态$\boldsymbol{x_{k_{0}}}$：
+\begin{equation*}
+  \boldsymbol{x_{k-1}} = \boldsymbol{F^{-1}}(\boldsymbol{x_{k}}-\boldsymbol{G}\boldsymbol{u_{k-1}})
+\end{equation*}
+同时根据（式\ref{eq:pos_kf_step}）中的第二行，误差协方差矩阵的传播方程，可以由$k$时刻的误差协方差矩阵$\boldsymbol{P_{k}}$追溯到$k_{0}$时刻的误差协方差矩阵$\boldsymbol{P_{k_{0}}}$：
+\begin{equation*}
+  \boldsymbol{P_{k-1}} = \boldsymbol{F^{-1}}(\boldsymbol{P_{k}-Q_{k}})\boldsymbol{(F^{\mathrm{T}})^{-1}}
+\end{equation*}
+将追溯得到的状态$\boldsymbol{x_{k_{0}}}$和误差协方差矩阵$\boldsymbol{P_{k_{0}}}$作为$k_{0}$时刻的先验估计，分别记为$\boldsymbol{x_{k_{0}}^{-}}$和$\boldsymbol{ M_{k_{0}}}$，使用测量值$\boldsymbol{y_{k_{0}}}$和卡尔曼增益$\boldsymbol{K_{k_{0}}}$得到后验估计：
+\begin{eqnarray*}
+  \boldsymbol{K_{k_{0}}} &=& \boldsymbol{M_{k_{0}}}\boldsymbol{H^{\mathrm{T}}}(\boldsymbol{HM_{k_{0}}H^{\mathrm{T}}+R_{k_{0}}})^{-1} \\
+  \boldsymbol{x_{k_{0}}^{+}} &=& \boldsymbol{x_{k_{0}}^{-}} + \boldsymbol{K_{k_{0}}}(\boldsymbol{y_{k_{0}}}-\boldsymbol{H}\boldsymbol{x_{k_{0}}^{-}}) \\
+  \boldsymbol{P_{k_{0}}} &=& (\boldsymbol{I} - \boldsymbol{K_{k_{0}}H})\boldsymbol{M_{k_{0}}}
+\end{eqnarray*}
+然后，由（式\ref{eq:pos_kf_step}）中第一，二行，以及$\boldsymbol{x_{k_{0}}^{+}}$和$\boldsymbol{P_{k_{0}}}$复原当前状态，得到$k$时刻的后验估计$\boldsymbol{x_{k}^{+}}$和$\boldsymbol{P_{k}}$。
+
+对测量延迟进行修正后的仿真结果如（图\ref{fig:vel_error_with_meas_delay_cancel}），可以看出，曲线与无测量延时情况下的误差曲线非常相似。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/vel_error_with_meas_delay_cancel.jpg}
+  \caption{补偿测量延迟后的速度估计误差}\label{fig:vel_error_with_meas_delay_cancel}
+\end{figure}
+\newpage
+\section{仿真与实验结果}\label{chap4:sec3}
+本节提供了采用上述方法设计的状态估计器的仿真与实际测量结果，实验证明上述的方法有较好的效果。\\
+由飞行器返回的数据得到各传感器数据噪声特性如下：
+\begin{table}[!ht]
+  \centering
+    \begin{tabular}{|c||c|}
+    \hline
+    测量    & 噪声标准差 \\
+    \hline
+    加速度计($\sigma_{\ddot{r}}$)  & $1.8282\mathrm{m}/\mathrm{s}^2$ \\
+    \hline
+    陀螺仪($\sigma_{\omega}$)   & $0.042\mathrm{rad/s}$ \\
+    \hline
+    加速度姿态($\sigma_{\Omega,acc}$) & $0.528\mathrm{rad}$ \\
+    \hline
+    摄像机姿态($\sigma_{\Omega,cam}$) & $0.024\mathrm{rad}$ \\
+    \hline
+    摄像机位移($\sigma_{r,cam}$) & $0.012\mathrm{m}$ \\
+    \hline
+    \end{tabular}%
+  \caption{传感器噪声特性} \label{tab:sensor_noise_std}%
+\end{table}\\
+上表（表\ref{tab:sensor_noise_std}）中传感器噪声的标准差取三轴中噪声最大的一轴的标准差，并且噪声基本服从高斯分布。
+
+\subsection{\matlab仿真}
+仿真数据来自飞行器传感器采集到的数据，估计器在\matlab中运行，由于无线通信硬件和单片机性能的有限，数据返回的周期为$30\mathrm{ms}$，因此在仿真环境中的估计器采样周期为$30\mathrm{ms}$而实际飞行器中的采样周期为$1\mathrm{ms}$。所以，在应用到实际飞行器中，需要对参数进行相应调节。
+\subsubsection*{姿态估计}
+（图\ref{fig:att_est_roll}）为飞行器横滚角估计的仿真结果，数据来自处于悬停状态下的飞行器，图中与估计值对比的是室内定位系统得到的欧拉角，另外加速度计得到的欧拉角噪声相对要大的多（图中并未显示），从结果可以看出滤波器能去除掉大量的观测噪声。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/att_est_roll.jpg}
+  \caption{横滚角估计仿真}\label{fig:att_est_roll}
+\end{figure}
+
+（图\ref{fig:att_est_roll_error}）为飞行器横滚角估计误差，状态误差协方差矩阵$\boldsymbol{P}$初始为单位矩阵，当滤波器趋于稳态时，理论上的误差标准差为$\sigma_{error,roll}=0.0178\mathrm{rad}$，从图中可以看出，实际的估计误差基本在理论值以内。俯仰角和航偏角估计也得到相似的结果。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/att_est_roll_error.jpg}
+  \caption{仿真中横滚角估计误差}\label{fig:att_est_roll_error}
+\end{figure}
+
+\noindent此时的滤波器增益为：
+\begin{equation*}
+  \boldsymbol{K}=\left(
+                   \begin{array}{ccccc}
+                     0.0011 & 0 & 0.0054 & 0 & 0 \\
+                     0 & 0.0011 & 0 & 0.0054 & 0 \\
+                     0 & 0 & 0 & 0 & 0.0061 \\
+                     0 & 0 & -0.0001 & 0 & 0 \\
+                     0 & 0 & 0 & -0.0001 & 0 \\
+                     0 & 0 & 0 & 0 & -0.0001
+                   \end{array}
+                 \right)
+\end{equation*}
+（图\ref{fig:att_est_gyro_bias}）为仿真中的估计得到的陀螺仪零偏。由于陀螺仪在每次飞行前进行自动校正，校正后零偏较小，仿真中得到陀螺仪$x,y,z$轴的零偏分别为$0.0004\mathrm{rad/s}$，$-0.0002\mathrm{rad/s}$，$0.0011\mathrm{rad/s}$。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/att_est_gyro_bias.jpg}
+  \caption{仿真中陀螺仪零偏估计}\label{fig:att_est_gyro_bias}
+\end{figure}
+\subsubsection*{位移估计}
+位移估计仿真中，输入为转换到\worldframe中并去除重分量的飞行器加速度测量值$\boldsymbol{\ddot{r}_{meas}}$以及室内定位系统的位移测量值$\boldsymbol{r_{cam}}$。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_est_x.jpg}
+  \caption{位移估计$x$轴仿真}\label{fig:sim_pos_est_x}
+\end{figure}
+（图\ref{fig:sim_pos_est_x}）中显示了仿真中$x$轴位移的估计值，由结果可看出估计值与测量值基本一致，曲线比较平滑，当然另一方面说明室内定位系统的位置数据噪声已经非常小。（图\ref{fig:sim_pos_est_vel_x}）为相应的$x$轴的速度估计，可以看出，速度估计噪声比较大，这是仿真时使用的采样间隔较大造成的，在实际中采用较短的采样周期，可以得到较好的速度估计结果。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_est_vel_x.jpg}
+  \caption{速度估计$x$轴仿真}\label{fig:sim_pos_est_vel_x}
+\end{figure}
+（图\ref{fig:sim_pos_est_x_error}）为$x$轴的估计误差，由于没有更准确的测量作为真实值，在这里采用经过滑动窗口平滑后的室内定位系统数据近似为真实值，以对估计误差提供一个参考值。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_est_x_error.jpg}
+  \caption{仿真中$x$轴位置估计误差}\label{fig:sim_pos_est_x_error}
+\end{figure}
+（图\ref{fig:sim_pos_est_x_bias}）为仿真中的$x$轴加速度零偏估计结果，稳态值大概为$0.008\mathrm{m}/\mathrm{s}^2$。对于$y,z$轴的仿真结果，与$x$轴结果类似。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/sim_pos_est_x_bias.jpg}
+  \caption{仿真中$x$轴加速度零偏}\label{fig:sim_pos_est_x_bias}
+\end{figure}
+\noindent与上述结果响应的滤波器增益为：
+\begin{equation*}
+\boldsymbol{K}=\left(
+  \begin{array}{c}
+    0.0955\\
+    0.1596\\
+   -0.0057\\
+  \end{array}
+\right)
+\end{equation*}
+\subsection{实际测试}
+实际测试中姿态估计运行频率为$1000\mathrm{Hz}$，其中陀螺仪与加速度计采样率为$1000\mathrm{Hz}$，室内定位系统反馈速率为$40\mathrm{Hz}$，由于没有更精确的测量数据，实验主要通过估计值与测量值比较来判断估计效果。
+\subsubsection*{姿态估计}
+（图\ref{fig:real_att_est_roll}）$\sim$（图\ref{fig:real_att_est_yaw}）为真实中飞行器的估计结果，相对于仿真结果，由于采样频率较高高，估计结果比较理想。为了提高系统鲁棒性，在实际中过程噪声的标准差设置值稍大于实验测量值。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_att_est_roll.jpg}
+  \caption{横滚角的真实估计效果}\label{fig:real_att_est_roll}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_att_est_pitch.jpg}
+  \caption{俯仰角的真实估计效果}\label{fig:real_att_est_pitch}
+\end{figure}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_att_est_yaw.jpg}
+  \caption{航偏角的真实估计效果}\label{fig:real_att_est_yaw}
+\end{figure}
+\noindent与上述估计结果相应的滤波器增益为：
+\begin{equation*}
+  \boldsymbol{K}=\left(
+                   \begin{array}{ccccc}
+                     0.0002 & 0 & 0.0024 & 0 & 0 \\
+                     0 & 0.0002 & 0 & 0.0024 & 0 \\
+                     0 & 0 & 0 & 0 & 0.0025 \\
+                     -0.0002 & 0 & -0.0022 & 0 & 0 \\
+                     0 & -0.0002 & 0 & -0.0022 & 0 \\
+                     0 & 0 & 0 & 0 & -0.0022
+                   \end{array}
+                 \right)
+\end{equation*}
+\subsubsection*{位移估计}
+位移估计的实际效果如下：
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_est_x.jpg}
+  \caption{$x$轴真实估计效果}\label{fig:real_pos_est_x}
+\end{figure}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_est_y.jpg}
+  \caption{$y$轴真实估计效果}\label{fig:real_pos_est_y}
+\end{figure}
+由（图\ref{fig:real_pos_est_x}）$\sim$（图\ref{fig:real_pos_est_z}）可以看出，位移估计的实际效果较好。（图\ref{fig:real_vel_est_xyz}）为相应的速度估计，可以看出，在实际中由于采样间隔缩短，相对于仿真结果，速度估计的噪声明显降低。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_pos_est_z.jpg}
+  \caption{$z$轴真实估计效果}\label{fig:real_pos_est_z}
+\end{figure}
+\noindent对三轴数据采用相同结构和参数的KF，与上述结果相应的滤波器增益为：
+\begin{equation*}
+  \boldsymbol{K}=\left(
+                   \begin{array}{c}
+                     0.151 \\
+                     0.628 \\
+                     -0.00621 \\
+                   \end{array}
+                 \right)
+\end{equation*}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/real_vel_est_xyz.jpg}
+  \caption{三轴速度真实估计效果}\label{fig:real_vel_est_xyz}
+\end{figure} 

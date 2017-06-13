@@ -1,0 +1,284 @@
+\chapter{混沌感知矩阵} \label{chap:cschaos}
+正如第\ref{chap:intro}章中介绍的，确定一个感知矩阵满足RIP条件，对于在低维测量空间中保留压缩感知原始信号的信息是十分必要的\footnote{这一部分工作已经发表在期刊\textit{IEEE Signal Processing Letters}\citet{Yu2010a}上。}。因此，压缩感知理论框架中的其中一个最重要的任务就是构造这样的感知矩阵。在本章中，我们将提出采用混沌序列来构造感知矩阵，称为“混沌感知矩阵”，并且通过理论证明，混沌感知矩阵在很大概率上也满足所谓的RIP条件，这一结果与高斯随机矩阵很相似。
+
+本章的主要贡献在于在混沌序列和压缩感知中建立了一个潜在联系。通过实验表明混沌感知矩阵的性能与高斯随机矩阵和稀疏随机矩阵具有相类似的结果。本章的组织结构如下：在第\ref{sec:cschaos:2}节，我们将分析Logistic混沌系统的统计特性。第\ref{sec:cschaos:3}节中我们介绍构造混沌感知矩阵的方法，并给出相应的证明。第\ref{sec:cschaos:4}节中，我们将通过实验来分析混沌感知矩阵的性能。最后，本章将给出简单的小结。
+\section{混沌系统及其统计性质}\label{sec:cschaos:2}
+ 考虑下面的二次迭代式:
+\begin{equation}\label{eq:logis}
+    z_{n+1} = rz_{n}(1-z_{n})
+ \end{equation}
+ 其中$r$为正的实数. 当$r\in ]0,4]$时, 式(\ref{eq:logis})就是简单的一维离散混沌系统, 称为Logistic映射. 特别的, 当$r=4$时, 式(\ref{eq:logis})的解为:
+ \begin{equation}
+  z_n = \frac{1}{2}[1-\cos(2 \pi \theta 2^n)]
+ \end{equation}
+ 众所周知, 由式(\ref{eq:logis})可以产生非常复杂的序列, 而其动态过程却非常简单, 因此在实际应用中常常被用做产生随机序列\citet{Wolfram}. 在这一节中, 我们将分析其统计性质: 分布; 相关性; 与采样距离相关的统计独立性.
+
+ 首先记作
+\begin{equation} \label{eq:xn}
+x_n=\cos(2 \pi \theta 2^n)
+\end{equation}
+显而易见, 因为序列$z_n$和序列$x_n$之间的线性关系, 使得它们具有相似的统计性质: 如果$x_n$和$x_m$是统计独立的, 相应的, $z_n$和$z_m$也是统计独立的.
+ \subsection{分布}
+由方程(\ref{eq:xn})产生的序列满足下面的统计性质\citet{Wang2008,Wolfram}: (a) 0均值; (b) 序列中所有的元素$x_n$满足$x_n\in [-1,1]$; (c) 具有稳定的统计分布$\rho(x) = \frac{1}{\pi}(1-x^2)^{-1/2}$.
+ \subsection{相关性}
+ 由于上述分布的对称性, 容易得到, 其序列的自相关具有如下性质: 所有的奇数阶自相关都为0, 即$E(x_n^m)=0$, 当$m$为奇数时; 所有的偶数阶自相关都不为0, 且可以通过计算得到
+ \begin{equation}\label{eq:even}
+E(x_n^m) = 2^{-m}\left( \begin{array}{c}
+                         m \\
+			 \frac{m}{2}
+                        \end{array}
+\right), \quad \textnormal{当$m$为偶数时;}
+\end{equation}
+ \subsection{统计独立性}
+在文献\cite{Wang2008}中,已经证明由方程(\ref{eq:xn})产生的序列的元素之间是不独立的. 但是通过随机变量之间的高阶相关性, 我们可以衡量两个随机变量之间的统计独立性, 即如果高阶不相关, 则可以看作近似统计独立. 而由方程(\ref{eq:xn})产生的序列中, 元素之间的高阶相关性又和序列的采样距离有关. 因此, 有下面的引理:
+\begin{lem}\label{lemma:independent}
+定义$X = \{x_n,x_{n+1},...,x_{n+k},...\}$为方程(\ref{eq:xn})产生的序列, 其初始点定义为$x_0 = \cos (2\pi \theta)$, 同时定义正整数$d$为采样距离, 那么对于任意的正整数$m_0,m_1<2^d$, 都有
+\begin{equation}\label{eq:lemma_independent}
+ E(x_n^{m_0} x_{n+d}^{m_1}) = E(x_n^{m_0})E(x_{n+d}^{m_1}) .
+\end{equation}
+\end{lem}
+证明:
+
+该证明分为两个部分:
+(1)当$m_0,m_1$中至少有一个是奇数时, 那么根据上述相关性的分析, 容易得到式(\ref{eq:lemma_independent})的右边等于0. 而对于该式的左边而言,则有
+\begin{eqnarray*}
+&& E(x_n^{m_0} x_{n+d}^{m_1}) \\
+&=& \int_{-1}^{1} \rho(x_0)x_n^{m_0} x_{n+d}^{m_1} dx_0 \\
+&=& \int_0^1 \cos^{m_0}(2 \pi \theta 2^{n})\cos^{m_1}(2 \pi \theta 2^{n+d}) d\theta \\
+&=& \frac{1}{2^{(m_0+m_1)}} \sum_{\sigma} \delta\left(2^n\sum_{i=1}^{m_0}\sigma_{n_i}+2^{n+d}\sum_{i=1}^{m_1}\sigma_{{(n+d)}_i}\right)
+\end{eqnarray*}
+其中最后一个等式用到了两个条件: a) $\cos \theta = (e^{i\theta}+e^{-i\theta})/2$; b)$\int_0^1 e^{i2 \pi \theta k} d\theta = \delta (k)$, 其中$\delta(k)=0$ 如果 $k\neq 0$ 否则等于$1$. $\sum_\sigma$表示所有可能多项式展开的组合, 其中$\sigma_{n_i}=\pm 1$, $\sigma_{{(n+d)}_i}=\pm 1$.
+
+然后分析式(\ref{eq:lemma_independent})的左边的可能的值, 可以有下面两种可能:
+\begin{itemize}
+  \item $m_1$是奇数, 则$\lvert \sum_{i=1}^{m_0}\sigma_{n_i} \rvert \leq m_0$, 且$\lvert \sum_{i=1}^{m_1}\sigma_{{(n+d)}_i}\rvert \geq 1$, 因此$2^n\sum_{i=1}^{m_0}\sigma_{n_i}+2^{n+d}\sum_{i=1}^{m_1}\sigma_{{(n+d)}_i}\neq 0$, 从而得出式(\ref{eq:lemma_independent})的左边也等于0;
+  \item $m_1$为偶数, 那么$m_0$一定是奇数(根据之前的假设), 可能出现$\sum_{i=1}^{m_1}\sigma_{{(n+d)}_i} = 0$, 但是$ \sum_{i=1}^{m_0}\sigma_{n_i} \neq 0$(因为$m_0$是奇数), 那么$2^n\sum_{i=1}^{m_0}\sigma_{n_i}+2^{n+d}\sum_{i=1}^{m_1}\sigma_{{(n+d)}_i}\neq 0$, 同样也推出式(\ref{eq:lemma_independent})的左边也等于0.
+\end{itemize}
+
+(2)当$m_0,m_1$都为偶数时, 可以经过简单的计算得到,
+\begin{eqnarray*}
+ E(x_n^{m_0} x_{n+d}^{m_1}) = 2^{-(m_0+m_1)} \left(\begin{array}{c}
+                                                  m_0 \\ m_0/2
+                                                 \end{array}
+\right)
+\left(\begin{array}{c}
+                                                  m_1 \\ m_1/2
+                                                 \end{array}
+\right)
+\end{eqnarray*}
+比较式(\ref{eq:even}), 可以得到式(\ref{eq:lemma_independent}). $\blacksquare$
+
+引理\ref{lemma:independent}说明当$d \rightarrow \infty$时, $x_n$和$x_{n+d}$是趋近于统计独立的, 这个结果正好和文章\cite{Vlad2009}的结果相对应. 因此, 如果我们取$d=15$或者更大, $x_n$和$x_{n+d}$的任意阶(这时$m_0,m_1$小于$2^d=32768$)矩, 都是不相关的. 这时, 可以近似的将$x_n$和$x_{n+d}$看作是统计独立的, 如图~\ref{fig:chaos_distribution}所示.
+
+\begin{figure}[!ht]
+\centering
+$
+\begin{array}{cc}
+  \includegraphics[width=0.45\textwidth]{figures/distribution_chaos_xn.pdf} & \includegraphics[width = 0.45\textwidth]{figures/distribution_chaos_xnd.pdf} \\
+  (a) & (b)
+\end{array}
+$\\
+$\begin{array}{cc}
+  \includegraphics[width=0.45\textwidth]{figures/distribution_chaos_5.pdf} &
+%   \includegraphics[width = 0.15\textwidth]{distribution_chaos_7.eps} &
+  \includegraphics[width = 0.45\textwidth]{figures/distribution_chaos_15.pdf} \\
+  (c)  & (d)
+\end{array}$
+\caption{(a)$x_n$的概率密度; (b)$x_{n+d}$的概率密度; (c)$d=5$时, $x_n$和$x_{n+d}$的联合概率密度; (d)$d=15$时, $x_n$和$x_{n+d}$的联合概率密度}\label{fig:chaos_distribution}
+\end{figure}
+\section{混沌感知矩阵}\label{sec:cschaos:3}
+%\subsection{混沌感知矩阵的RIP特性}
+定义混沌序列$Z(d,k,z_0) = \{z_n, z_{n+d}, ..., z_{n+kd} \} $为从Logistic映射(\ref{eq:logis})由初始值$z_0$产生的一组序列中经过采样之后得到
+的序列, 其采样距离定义为$d$, $k$为采样点个数. 另外, 定义$x_k\in X(d,k,x_0)$为对应的规则化之后的序列
+\begin{equation}\label{eq:xk}
+    x_k = 1-2z_{n+kd}
+\end{equation}
+不难看出, $X(d,k,x_0)$对应式(\ref{eq:xn}), 且$x_0=1-2z_{0}$, 因此序列$X(d,k,x_0)$满足上节讨论的统计性质.
+
+为了构造混沌压缩感知矩阵$\Phi\in \mathbb{R}^{M\times N}$, 首先产生采样的Logistic序列$X(d,k,x_0)$, 其中$k=MN$, 然后将序列$X(d,k,x_0)$按逐列的方式构造$\Phi$如下
+\begin{equation}\label{eq:Phi}
+    \Phi = \sqrt{\frac{2}{M}}\left(
+             \begin{array}{ccc}
+               x_0 & \dots  & x_{M(N-1)} \\
+	       x_1 & \dots & x_{M(N-1)+1}\\
+               \vdots & \vdots & \vdots \\
+               x_{M-1} & \dots & x_{MN-1} \\
+             \end{array}
+           \right)
+\end{equation}
+其中, $\sqrt{\frac{2}{M}}$为正则化因子. 根据上节分析的结果, 可以选择采样距离$d=15$来保证序列$X(d,k,x_0)$中元素之间的独立性, 那么矩阵$\Phi$中的元素两两之间都是近似独立同分布的, 其分布满足$\rho(x)$. 可以很容易的计算出矩阵$\Phi$满足$E(\Phi^T\Phi)=I$, 其中$I$为单位矩阵.
+
+下面我们来分析混沌压缩感知矩阵的RIP性质, 首先给出定理如下
+\begin{them}
+\label{thm:RIP} 定义混沌压缩感知矩阵$\Phi \in \Real^{M\times N}$如式(\ref{eq:Phi}), 那么在很大概率上, $\Phi$满足$s$阶常数为$\delta >0$的RIP条件\footnote{为了后续表示方便, 这里省略了$\delta_s$的下标.}, 如果$s\leq O(M/\log (N/s))$.
+\end{them}
+不难看出, 矩阵$\Phi$是一个近似独立同分布的亚高斯矩阵, Cand\`{e}s, Pajor等\citet{Candes2006a, Mendelson2008}已经证明了所有的亚高斯矩阵都满足RIP条件. 尽管如此, 在本文中, 我们将根据Baraniuk的思想\citet{Baraniuk2008a}, 给出对定理~\ref{thm:RIP}的简单证明. 同时, 我们将看到, 引理~\ref{lemma:independent}对后续证明的影响.
+
+证明定理~\ref{thm:RIP}之前, 利用上节中的混沌序列相关性性质和高斯随机变量的二阶稳定性, 可以得到类似文献\cite{Achlioptas2001}的结论
+\begin{lem}
+\label{lemma:2} 对于$h\in ]0,1/2[$,
+\[
+E[\exp {(hQ^{2})}]\lessapprox \frac{1}{\sqrt{1-2h}}
+\]
+\[E[Q^{4}]\lessapprox 3\]
+ 其中$Q=\langle \mathbf{x}, \mathbf{u}\rangle$, $\mathbf{x}$为矩阵$\Phi$的任意行向量, $\mathbf{u}$ 为任意的单位矢量.
+\end{lem}
+引理~\ref{lemma:2}中的符号$\lessapprox$表示近似小于, 且当采样距离$d\rightarrow \infty$时, 为严格的小于等于$\leq$.
+
+定理\ref{thm:RIP}的证明:
+
+根据Baraniuk的思想, 可以将证明分为两个部分, 首先证明矩阵$\Phi$的任意子矩阵$\Phi_T$满足J-L性质\citet{Johnson1984}, 其次通过排列组合理论可以很容易的得出最后的结论.\\
+(1) J-L性质:\\
+定义$\Phi_T$为矩阵$\Phi$的任意列子矩阵, 且选择的列数目$|T|=s$, $s$为信号稀疏度. 那么根据Chernoff定理, 对于任意的单位矢量$\mathbf{u}\in \mathbb{R}^{s}$, 给定正的常数$h$, 则
+\begin{eqnarray*}
+&&\Pr \left[ {{{\left\Vert {{\Phi _{T}}}\mathbf{u}\right\Vert }^{2}}\geq
+1+\delta }\right] \\
+&\leq &\exp \left( {-hM\left( {1+\delta }\right) }\right) E%
+\left[ {\exp \left( {h M{{\left\Vert {{\Phi _{T}}}\mathbf{u}\right\Vert }^{2}}%
+}\right) }\right] \\
+&\approx&\exp \left( {-hM\left( {1+\delta }\right) }\right) {\left( {E\left[ {\exp
+\left( {h{Q^{2}}}\right) }\right] }\right) ^{M}} \\
+&\lessapprox &\exp \left( {-hM\left( {1+\delta }\right) }\right) {\left( {\frac{1}{%
+\sqrt{1-2h}}}\right) ^{M}}\\
+% \end{eqnarray*}%
+% where the second approximation will be equal when $d\rightarrow \infty$.
+%
+% It will reach the extremum of the above equation when its
+% derivative with respect to $h$ is equal to $0$, then $h=\frac{1}{2}\frac{\delta }{1+\delta }$.
+% \begin{eqnarray*}
+% &&\Pr \left[ {{{\left\Vert {{\Phi _{T}}}\mathbf{u}\right\Vert }^{2}}\geq
+% 1+\delta }\right]\\
+%  &\leq &{\left( {\frac{1}{\sqrt{1-2h}}}\right) ^{M}}\exp
+% \left( {-hM\left( {1+\delta }\right) }\right) \\
+&\lessapprox&\exp \left( {-\frac{M}{2}\left( {{\delta ^{2}}/2-{\delta ^{3}}/3}\right) }%
+\right) \\
+&=&\exp (-c_{1}(\delta )M)
+\end{eqnarray*}%
+其中最后一项不等式是根据泰勒展开, 且将$h=\frac{1}{2}\frac{\delta}{1+\delta}$得到的\footnote{取$h$的极值点.}. 另外, $c_1(\delta) = \delta^2/4-\delta^3/6$.
+
+同理, 我们可以得到其下界
+\begin{eqnarray*}
+&&\Pr \left[ {{{\left\Vert {{\Phi _{T}}}\mathbf{u}\right\Vert }^{2}}\leq
+1-\delta }\right]\\ \nonumber
+&\leq &\exp \left( {hM\left( {1+\delta }\right) }\right) E%
+\left[ {\exp \left( {-h M{{\left\Vert {{\Phi _{T}}\mathbf{u}}\right\Vert }^{2}%
+}}\right) }\right]  \nonumber \\
+&\approx&\exp \left( {hM\left( {1+\delta }\right) }\right) {\left( {E\left[ {\exp
+\left( {-h{Q^{2}}}\right) }\right] }\right) ^{M}}  \label{eq:lowb} \\
+% \end{eqnarray}%
+% Using Taylor expansion for the term ${\exp \left( {-h{Q^{2}}}\right) }$,
+% then one has
+% \begin{equation*}
+% E\left[ {\exp \left( {-h{Q^{2}}}\right) }\right] <1-h+\frac{{{h^{2}}}}{2}E%
+% \left[ {{Q^{4}}}\right]
+% \end{equation*}%
+% with the fact that $E\left[ Q^{2}\right] =1$. Thus, from Lemma \ref{lemma:2}%
+% , one gets
+% \begin{equation*}
+% E\left[ {\exp \left( {-h{Q^{2}}}\right) }\right] \leq 1-h+\frac{3}{2}{h^{2}}
+% \end{equation*}%
+% Then substituteing (\ref{eq:lowb}) with this inequality, and imposing that
+% the derivative of the bound with respect to $h$ is equal to $0$, one gets
+% \begin{equation*}
+% h=\frac{-2-\delta +\sqrt{4+8\delta -5\delta ^{2}}}{3(1-\delta )}
+% \end{equation*}%
+% which yields
+% \begin{eqnarray*}
+% &&\Pr \left[ {{{\left\Vert {{\Phi _{T}}}\mathbf{u}\right\Vert }^{2}}\leq
+% 1-\delta }\right] \\
+&\lessapprox&\exp (h M(1-\delta ))\left( 1-h+\frac{3}{2}h^{2}\right) ^{M} \\
+% &=&\left( (1-\epsilon (\delta )+\frac{3}{2}\epsilon ^{2}(\delta ))\exp
+% (\epsilon (\delta )(1-\delta ))\right) ^{M} \\
+&=&\exp (-c_{2}(\delta )M)
+\end{eqnarray*}
+这时取$ h=h_{opt}=\frac{-2-\delta +\sqrt{4+8\delta -5\delta ^{2}}}{3(1-\delta )}$, 且$c_2(\delta) = h_{opt}(1-\delta)(1-h_{opt}+3h^2_{opt}/2)$.
+
+取$c(\delta )=\min \{c_{1}(\delta ),c_{2}(\delta )\}$, 最终得到
+\begin{equation}\label{eq:JL}
+\Pr \left[ \left\vert \left\Vert {{\Phi _{T}}\mathbf{u}}\right\Vert
+^{2}-1\right\vert \geq \delta \right] \leq 2\exp (-c(\delta )M)
+\end{equation}
+
+(2) RIP:\\
+对于某一种可能的$s$-稀疏的信号$\mathbf{v}$, 记$T$为非零值元素的坐标集合, 那么$|T|=s\ll N$. 那么可以根据这个坐标集合$T$构造相应$\Phi$的子矩阵$\Phi_T$, 因此$\Phi_T$满足式(\ref{eq:JL}). 定义事件$\mathcal{E}_{s}$为
+\[
+\mathcal{E}_{s}=\left\{ \left\vert \left\Vert {{\Phi _{T}}\mathbf{u}}\right\Vert
+^{2}-1\right\vert \geq \delta \right\}
+\]
+事件$\mathcal{E}$为所有可能的$\mathcal{E}_{s}$的集合,即
+\[\mathcal{E}=\bigcup_{\kappa=1}^{s}\mathcal{E}_{s}\]
+那么有
+\begin{eqnarray*}
+\Pr \left[ \mathcal{E}\right]  &=&\bigcup_{i}\Pr \left[ \mathcal{E}_{T_{i}}%
+\right] \lessapprox
+2\left(
+\begin{array}{c}
+N \\
+s%
+\end{array}%
+\right) \exp \left( -c(\delta )M\right) \\&\leq& 2(eN/s)^{s}\exp \left(
+-c(\delta )M\right)  \\
+&=&\exp \left( {\log 2-c\left( \delta \right) M+s\left( {\log \left( {N/s}%
+\right) +1}\right)}\right)
+\end{eqnarray*}%
+其中, 设常数$c_{3}>0$, 只要$s\leq c_{3}M/\log (N/s)$, 上式的上界则只含有指数项且其指数满足$\leq -c_{4}M$, 其中$c_{4}\leq c(\delta )-c_{3}[1+1/\log {(N/s)}]$. 并且, 能找到合适的常数$c_{3}>0$足够小, 以至于$c_{4}>0$.
+
+因此, 矩阵$\Phi$满足RIP条件的概率至少为$1-\Pr \left[ \mathcal{E}\right] \gtrapprox 1-2e^{-c_{4}M}$. \hfill $\blacksquare$
+
+
+\section{仿真实验}\label{sec:cschaos:4}
+本节将对比混沌压缩感知矩阵和高斯随机矩阵, 伯努利随机矩阵, 稀疏随机矩阵性能. 实验中用到的混沌压缩感知矩阵$\Phi$都是根据上节介绍的构造方法, 定义采样距离$d=15$构造的; 稀疏信号$\mathbf{v}$只有$\pm 1$非零值, 且非零值的位置和正负号都是随机给定的; 测量信号$\mathbf{y}$则直接是稀疏信号$\mathbf{v}$在感知矩阵上的映射. 实验中用到的重建算法, 都采用的是由Donoho等开发的SparseLab\citet{Sparselab}, 且定义信号可恢复的标准为$\|\mathbf{v}^*-\mathbf{v}\|<0.1$, 其中$\mathbf{v}^*$是稀疏信号$\mathbf{v}$的恢复.
+
+可以将实验分为下面几个部分: \\
+1. 稀疏度和测量长度, 稀疏度和信号长度之间的关系: 首先, 固定信号长度$N=800$, 令测量长度$M$从100到500变化, 重复实验1000次, 记录下都可恢复的最大稀疏度$s$, 如图~\ref{fig:chaos_sm}所示; 其次, 固定测量长度$M=200$, 令信号长度$N$从300到1000变化, 重复实验1000次, 记录下都可恢复的最大稀疏度$s$, 如图~\ref{fig:chaos_sn}所示. 图~\ref{fig:chaos_probability}为图~\ref{fig:chaos_sm}的更为细节的表示.\\
+2. 固定信号长度和测量长度, 各种稀疏度下, 信号的可恢复概率: 固定信号长度$N=100$, 测量长度$M=50$, 重复实验1000次, 记录下对应每个稀疏度的可恢复概率, 如图~\ref{fig:chaos_recrate}所示.\\
+3. 不同初始状态下产生的混沌压缩感知矩阵的性能对比: 对应不同的初始状态, 即设置系统(\ref{eq:logis})的初值为$z_0\in\{0.1,0.2,0.3,0.4,0.6,0.7,0.8,0.9\}$, 分别构造不同的混沌压缩感知矩阵, 然后重复部分2的实验, 如图~\ref{fig:chaos_recrate_int}所示.
+
+实验表明, 基于混沌系统产生的感知矩阵可以达到和高斯随机矩阵几乎等同的效果; 另外, 混沌系统不同初始状态, 对重构算法的性能几乎没有影响.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width = 0.8\textwidth]{figures/N800s_M.pdf}
+\caption{固定信号长度$N=800$, 不同测量长度$M$, 可恢复的最大稀疏度$s$}\label{fig:chaos_sm}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width = 0.8\textwidth]{figures/Measurements200s_N.pdf}
+\caption{固定测量长度$M=200$, 不同信号长度$N$, 可恢复的最大稀疏度$s$}\label{fig:chaos_sn}
+\end{figure}
+
+
+\begin{figure}[!ht]
+\centering
+\begin{equation*}
+ \includegraphics[width = 0.8\textwidth]{figures/probability_n1000_s_M.pdf}
+\end{equation*}
+\caption{固定信号长度为$N=1000$, 不同测量和不同稀疏度下, 可恢复概率}\label{fig:chaos_probability}
+\end{figure}
+
+\begin{figure}
+ \centering
+ \includegraphics[width = 0.8\textwidth]{figures/recoveryrate_m50n100.pdf}
+\caption{不同感知矩阵的可恢复概率}\label{fig:chaos_recrate}
+\end{figure}
+
+
+\begin{figure}[!ht]
+ \centering
+ \includegraphics[width = 0.8\textwidth]{figures/different_chaos_ints_all.pdf}
+\caption{不同初始状态的混沌压缩感知矩阵的可恢复概率}\label{fig:chaos_recrate_int}
+\end{figure}
+
+
+
+\section{小结}
+本文提出了用混沌系统(确切的说, Logistic映射)产生压缩感知矩阵, 并通过理论分析得到, 如果给定足够长的采样距离, 可以确保混沌序列的统计独立性, 从而保证了混沌压缩感知矩阵在很大概率上满足RIP条件. 用混沌的方法产生压缩感知矩阵相比其他随机方法, 其动态过程简单, 因此硬件实现容易. 其次, 由于采用的是确定性的非线性系统, 因此后续的针对性的恢复算法是可能的. 最后, 通过实验可以看出, 混沌压缩感知矩阵具有同高斯随机矩阵等感知矩阵同样的效果.
+
+在压缩感知理论框架中，构造感知矩阵仍然是一个很开放的问题。在很多方面，例如Toplitz感知矩阵和结构化感知矩阵等等，都需要更深层的研究。尽管在本章中提出了一种确定性（从某种意义上）的方法，即采用混沌序列来构造感知矩阵，以后的工作还可以从下面的几个方面来考虑：
+\begin{enumerate}
+  \item 其他类型的混沌感知矩阵，例如部分Toplitz矩阵（这一部分的初步工作已经发表在论文\cite{Yu2010b}中）或者循环矩阵；
+  \item 采用其他类型的混沌系统，例如circle map或者tent map等等\citet{Collet1997}；
+  \item 混沌感知矩阵在安全传输方面的潜在应用。
+\end{enumerate}	
+

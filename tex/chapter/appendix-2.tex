@@ -1,0 +1,97 @@
+\chapter{欧拉角微分与机体角速度的关系}\label{appendix:euler_dot_omega}
+由（附录\ref{appendix:euler}）中的欧拉角定义和旋转矩阵的性质可以得到：
+\begin{equation*}
+  \left(
+     \begin{array}{c}
+       \omega_{x} \\
+       \omega_{y} \\
+       \omega_{z} \\
+     \end{array}
+   \right)=
+   \left(
+     \begin{array}{c}
+       \dot{\varphi} \\
+       0 \\
+       0 \\
+     \end{array}
+   \right)+
+   \boldsymbol{R_{\varphi}}\left(
+    \begin{array}{c}
+     0 \\
+      \dot{\theta} \\
+        0 \\
+         \end{array}
+     \right)+
+   \boldsymbol{R_{\varphi}}\boldsymbol{R_{\theta}}
+   \left(
+     \begin{array}{c}
+       0 \\
+       0 \\
+       \dot{\psi} \\
+     \end{array}
+   \right)
+\end{equation*}
+进一步计算可得：
+\begin{equation}\label{eq:body_rate_euler_rate}
+  \left(
+     \begin{array}{c}
+       \omega_{x} \\
+       \omega_{y} \\
+       \omega_{z} \\
+     \end{array}
+   \right)=
+   \left(
+     \begin{array}{ccc}
+       1 & 0 & -\sin(\theta) \\
+       0 & \cos(\varphi) & \cos(\theta)\sin(\varphi) \\
+       0 & -\sin(\varphi) & \cos(\theta)\sin(\varphi) \\
+     \end{array}
+   \right)
+   \left(
+     \begin{array}{c}
+       \dot{\varphi} \\
+       \dot{\theta} \\
+       \dot{\psi} \\
+     \end{array}
+   \right)
+\end{equation}
+以及：
+\begin{eqnarray*}
+   \left(
+     \begin{array}{c}
+       \dot{\varphi} \\
+       \dot{\theta} \\
+       \dot{\psi} \\
+     \end{array}
+   \right) &=&
+   \left(
+     \begin{array}{ccc}
+       1 & 0 & -\sin(\theta) \\
+       0 & \cos(\varphi) & \cos(\theta)\sin(\varphi) \\
+       0 & -\sin(\varphi) & \cos(\theta)\sin(\varphi) \\
+     \end{array}
+   \right)^{-1}
+     \left(
+     \begin{array}{c}
+       \omega_{x} \\
+       \omega_{y} \\
+       \omega_{z} \\
+     \end{array}
+   \right)\\
+     &=&
+      \left(
+     \begin{array}{ccc}
+       1 & \tan(\theta)\sin(\varphi) & \tan(\theta)\cos(\varphi) \\
+       0 & \cos(\varphi) & -\sin(\varphi) \\
+       0 & \sec(\theta)\sin(\varphi) & \sec(\theta)\cos(\varphi) \\
+     \end{array}
+   \right)
+     \left(
+     \begin{array}{c}
+       \omega_{x} \\
+       \omega_{y} \\
+       \omega_{z} \\
+     \end{array}
+   \right)
+\end{eqnarray*}
+需要注意的是，当$\theta=\pm90^{\circ}$时，（式\ref{eq:body_rate_euler_rate}）中的矩阵不可逆，在实际应用中需要做相应的处理。

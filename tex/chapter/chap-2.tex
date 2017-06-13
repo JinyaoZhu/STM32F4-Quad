@@ -1,0 +1,93 @@
+\chapter{硬件结构}\label{chap2}
+\section{四轴飞行器}
+四轴飞行器的物理结构，动力系统与飞行器的运动性能及稳定性有着密切的关系。四轴飞行器在飞行过程中，飞行器主要受到两个力的影响，一个是与飞行器机体平面垂直的升力，一个是重力。飞行器在三维空间中线运动所需要的加速度来自升力与重力的合力，飞行器的旋转运动所需的力矩则来自飞行器每个螺旋桨产生的升力差。一般来说飞行器尺寸越大，其质量与转动惯量越大，要使飞行器获得强的机动性，飞行器的必须要有一套高输出功率的动力系统，而高功率的动力系统又往往体积大，质量大。因此，一般来说尺寸大的飞行器的机动性往往不如小尺寸的飞行器。文献\citet{Mahony2012}中指出，随着多轴飞行器的尺寸减少，飞行器能产生的最大角加速度越大，能产生的最大线加速度也会越大或至少不变。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.6\textwidth]{figures/my_quad3.jpg}
+  \caption{本设计中的飞行器}\label{my_quad3}
+\end{figure}
+
+本设计的飞行器主要在室内进行飞行，并且需要较强的机动性，因此飞行器的体积需要尽量的小。但是体积过小的飞行器其负载能力非常弱，往往只能满足单纯的飞行功能，难以继续在飞行器上进行上层应用的开发。考虑到飞行器的机动性，安全性，负载能力等各方面的要求，本设计的飞行器（图\ref{my_quad3}）具体硬件配置如下：
+\subsection{机架}
+综合飞行器体积与负载能力要求的考虑，本设计采用了轴距为$250\mathrm{mm}$的X型，高强度塑料四轴飞行器机架。
+\subsection{飞行控制器}
+本设计中机载的飞行控制器需要完成传感器数据采集，与上位机通信，飞行状态估计，飞行控制等几个主要任务。飞行控制系统一般由主控制器（一般是高性能的单片机）与一些传感器以及电源管理电路组成，目前许多开源飞控采用STM32F103系列的单片机作为主控制器，STM32F103系列单片机具有非常高的性价比，适合用于一些相对简单的飞行控制处理，但是对于实验研究中用到的一些更复杂的算法，或者还没经过运算速度优化的算法，其运算能力往往难以满足要求。对于本设计中的应用，带有浮点运算单元(FPU)的STM32F4系列的单片机是一个较好的选择。经过相关资料的搜索，发现目前有一些开源飞控板也采用了STM32F4系列的单片机，包括Pixhawk\citet{pixhawk}，Taulab\citet{taulab}的Quanton等，经过分析比较，本设计直接在Quanton飞控(图\ref{fig:quaton})的硬件电路基础上进行开发，这样可以省去了许多调试底层硬件的麻烦，把更多的时间用于算法的研究上。飞控板上搭载了一片意法半导体(ST)公司的STM32F405RGT6 32位单片机，ARM Cortex-M4内核，具有浮点运算单元(FPU)，主频$168\mathrm{MHz}$，具有$192\mathrm{kB}$的RAM，$1\mathrm{MB}$的Flash储存空间。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.3\textwidth]{figures/quanton_fc.jpg}
+  \caption{Quanton飞控板}\label{fig:quaton}
+\end{figure}
+\subsection{传感器}
+飞控板上配备了10轴传感器，由以下几个传感器组成：
+\begin{itemize}
+  \item Ivensence MPU6000:\\
+  6轴IMU，包含3轴加速度计与3轴陀螺仪，内置低通滤波器，陀螺仪最高输出频率：$8\mathrm{kHz}$（未开启低通滤波），$1\mathrm{kHz}$（开启低通滤波），加速度数据最高输出频率：$1\mathrm{kHz}$，支持IIC或SPI总线协议通信。本设计中，采用SPI总线进行通信，开启低通滤波，截至频率设置为$42\mathrm{Hz}$，采样率$1\mathrm{kHz}$。
+  \item Honeywell HMC5883:\\
+  三轴磁阻传感器，最大输出速率$160\mathrm{Hz}$，罗盘精度：$1^\circ\sim2^\circ$，由于室内环境中电子罗盘十分容易受到干扰，并且每次飞行器前需要进行复杂的校正过程，本设计中并没有应用电子罗盘。
+  \item Measurement Specialties MS5611:\\
+  气压计，内置数字温度计，支持IIC或SPI总线协议通信，最大气压分辨率：$0.012\mathrm{mba}$，高度分辨率：$>10\mathrm{cm}$，设置为最高分辨率时转换时间为$8\sim9\mathrm{ms}$。由于气压计获得的高度数据噪声大，精度相对较低，并不适用于室内的精确定位，本设计中并没有应用气压计。
+\end{itemize}
+\subsection{动力系统}
+为了获得较高的输出功率，本设计采用无刷电机驱动螺旋桨。飞行器的动力系统包括以下部件（图\ref{fig:power_system}）：
+\begin{itemize}
+  \item 电机：采用T-Motor的MN1806电机，最大持续输出功率150W，最大持续工作电流$14\mathrm{A}$，重量$18\mathrm{g}$。
+  \item 电子调速器：采用DALRC BL12A电子调速器，最大持续工作电流12A。
+  \item 螺旋桨：采用半径$60\mathrm{mm}$，螺距为$45\mathrm{mm}$的塑料螺旋桨。
+  \item 电池：采用$11.1\mathrm{V}$，$1300\mathrm{mAh}$的锂聚合物动力电池，放电倍率为25C。
+\end{itemize}
+经实验测试，四个螺旋桨产生的最大升力约为13.8N。
+\begin{figure}[!ht]
+\centering
+$
+\begin{array}{c}
+  \begin{array}{cc}
+  \includegraphics[width=0.35\textwidth]{figures/motor.jpg} & \includegraphics[width=0.35\textwidth]{figures/bec.jpg}\\
+  (a) & (b)\\
+  \includegraphics[width=0.35\textwidth]{figures/propeller.jpg}&
+  \includegraphics[width=0.35\textwidth]{figures/battery.jpg} \\
+  (c) & (d)\\
+  \end{array}
+\end{array}
+$
+\caption{(a)电机;(b)电子调速器;(c)螺旋桨;(d)电池;}
+\label{fig:power_system}
+\end{figure}
+\subsection{飞行控制软件}
+本设计的飞行控制软件由本人自主开发，为兼顾飞行控制程序的实时性，可靠性与可扩展性，本设计采用$\mathrm{Micrium}^{\circledR}$公司\citet{micrium}的可剥夺式实时操作系统$\mathrm{\mu C/OS-III}^{\circledR}$。操作系统上主要运行了几大任务：遥控器接收解码，上位机通信，传感器采集，状态估计，姿态控制，位置控制和飞行状态监测。其中状态估计任务的运算频率为1000Hz，受到电子调速器的限制姿态控制任务运行频率为400Hz，位置控制任务运行频率为200Hz。所有程序在$\mathrm{Keil}~ \mu\mathrm{Vision}^{\circledR}4$环境下进行开发。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{figures/keil.jpg}
+  \caption{飞行控制程序开发环境}\label{fig:keil}
+\end{figure}
+\section{室内定位系统}
+按照本设计的应用要求，需要一套高精度，低噪声，高速率的室内定位系统，符合这几个要求的定位方法目前一般只有用外部摄像机来进行定位，对于摄像机的选择，本设计采用了红外摄像机，配合主动标记的方法。因为，对于一般的RGB摄像机或者黑白摄像机，考虑到室内环境的复杂性，往往会给定位带来很多的干扰，这样算法的复杂度往往较高，并且鲁棒性低。而使用红外摄像机，则能把非红外波段的自然光或灯光，利用光学的方法滤除，使干扰大大降低，算法的复杂度降低，系统的鲁棒性也得到很大提高，使高速率，高质量的信息反馈成为可能。
+\subsection{红外相机}
+本设计采用了两个京航JHSM36BF-R近红外工业相机(图\ref{fig:camera})，有效像素为36万，最高输出帧率为62fps，响应波段范围为$800\mathrm{nm}\sim1000\mathrm{nm}$。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.4\textwidth]{figures/camera.jpg}
+  \caption{JHSM36BF-R近红外工业相机}\label{fig:camera}
+\end{figure}
+\subsection{计算机软件}
+室内定位系统的图像处理过程在计算机上进行处理，本设计结合了开源计算机视觉库OpenCV\citet{opencv}和$\mathrm{MATLAB}^{\circledR}$来进行了图像处理与摄像机校正。开发环境为\makebox{$\mathrm{Visual Studio}^{\circledR} 2013$}。计算机获得飞行器的位置信息与姿态信息后通过蓝牙进行数据反馈，反馈频率为40Hz。
+\subsection{标记物}
+为了让红外相机能够检测到飞行器的状态，飞行器顶部安装了了3颗波长为820nm的红外LED(图\ref{fig:marker})。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.5\textwidth]{figures/marker.jpg}
+  \caption{主动标记}\label{fig:marker}
+\end{figure}
+\subsection{摄像机布局}
+摄像机在实验室中安装如（图\ref{fig:cam_arrange}）。
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.5\textwidth]{figures/cam_arrange.jpg}
+  \caption{摄像机布局}\label{fig:cam_arrange}
+\end{figure}
+\subsection{数据延时}\label{chap2:meas_delay}
+（图\ref{fig:delay}）显示了定位系统中的数据延时，飞行器的姿态和位移反馈数据的延迟大约为40ms，其中延迟较大的部分是摄像机，和蓝牙。摄像机延迟的部分主要由感光器的曝光过程和摄像机内部数据处理造成，蓝牙的延迟主要来自于数据的空中传输时间以及数据的调制和解调过程。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figures/delay.jpg}
+  \caption{数据延时}\label{fig:delay}
+\end{figure}

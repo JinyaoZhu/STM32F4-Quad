@@ -2,4 +2,12 @@ Debug/
 Release/
 Project/
 *.exe
+*.out
+*.lot
+*.toc
+*.blg
+*.bbl
+*.aux
+*.lof
+*.log
 
