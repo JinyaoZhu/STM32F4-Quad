@@ -6,7 +6,7 @@ A simple vision-based indoor navigation system is also provided, which using act
 The Flight Controller is developed in IDE uVison Keil4 using C language, and the indoor positioning system is based on OpenCV library.
 
 ## Dissertation  
-STM32F4-Quad/dissertation.pdf
+https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
 ## Test video
 **Playing music:**  
