@@ -13,7 +13,7 @@ https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 ./Matlab : Matlab simulation of the quadrotor\
 ./Quad_indoor_cam(vision) : source code of the flight controller\
 ./Quad_3D_display : position and attitude visualization\
-./Stereo Camera Calibration : code for camera calibration\
+./Stereo_Camera_Calibration : code for camera calibration\
 ./tex : source code for the dissertation
 
 ## Test video
