@@ -6,10 +6,13 @@ A simple vision-based indoor navigation system is also provided, which using act
 The Flight Controller is developed in IDE uVison Keil4 using C language, and the indoor positioning system is based on OpenCV library.
 
 ## Test video
-Playing music:
+**Playing music:**  
 https://youtu.be/FTTgFP2V9RU "Little star"
 
-Trajectory tracking:
+**Gesture control:**  
+https://youtu.be/_VyHRGHKnpY with kinect
+
+**Trajectory tracking:**
 * 1: https://youtu.be/Airv29XN67Q curve1
 * 2: https://youtu.be/eWLOpIESicU 1D sine
 * 3: https://youtu.be/p_XNRUGR_co 3D 
