@@ -8,6 +8,14 @@ The Flight Controller is developed in IDE uVison Keil4 using C language, and the
 ## Dissertation  
 https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
+## Folder  
+./Indoor_Positionning_System : source code for indoor positionning system in PC\
+./Matlab : Matlab simulation of the quadrotor\
+./Quad_indoor_cam(vision) : source code of the flight controller\
+./Quad_3D_display : position and attitude visualization\
+./Stereo Camera Calibration : code for camera calibration\
+./tex : source code for the dissertation
+
 ## Test video
 **Playing music:**  
 https://youtu.be/FTTgFP2V9RU "Little star"
