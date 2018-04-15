@@ -1,15 +1,15 @@
 # STM32F4-Quad
-An STM32F4 based Quadrotor Flight Controller running on the RTOS uC/OS-III, which mainly tested in the indoor environment. Including attitude control, position control and trajectory tracking.
+An STM32F4 based Quadrotor Flight Controller running on the RTOS uC/OS-III, which mainly tested in indoor environment. Including attitude control, position control and trajectory tracking.
 
-A simple vision-based indoor navigation system is also provided, which using active infrared makers as the locators.
+A simple vision-based indoor navigation system is also provided, which using active infrared makers as locators.
 
-The Flight Controller is developed in IDE uVison Keil4 using C language, and the indoor positioning system is based on OpenCV library.
+The Flight Controller is developed in uVison Keil4 using C, and the indoor positioning system is based on OpenCV library.
 
 ## Dissertation  
 https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
 ## Folder  
-./Indoor_Positionning_System : source code for indoor positionning system in PC\
+./Indoor_Positionning_System : source code for indoor positioning system in PC\
 ./Matlab : Matlab simulation of the quadrotor\
 ./Quad_indoor_cam(vision) : source code of the flight controller\
 ./Quad_3D_display : position and attitude visualization\
@@ -18,7 +18,7 @@ https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
 ## Test video
 **Playing music:**  
-https://youtu.be/FTTgFP2V9RU "Little star"
+https://youtu.be/FTTgFP2V9RU "Little Star"
 
 **Gesture control:**  
 https://youtu.be/_VyHRGHKnpY with kinect
