@@ -3,8 +3,8 @@ STM32F4 based Quadrotor Flight Controller running on the RTOS uC/OS-III, mainly 
 
 A simple vision-based indoor navigation system is provided, which using active infrared makers as locators.
 
-The Flight Controller is developed in uVison Keil4 using C, and the indoor positioning system is based on OpenCV3 library.
-
+The Flight Controller is developed in uVison Keil4 using C, and the indoor positioning system is based on OpenCV3 library.  
+![alt text](https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/tex/figures/my_quad3.jpg "quadrotor prototype")
 ## Dissertation  
 https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 

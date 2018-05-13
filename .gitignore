@@ -1,6 +1,7 @@
 Debug/
 Release/
 Project/
+**/~*
 *.exe
 *.out
 *.lot
