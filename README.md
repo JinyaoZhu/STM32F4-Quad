@@ -1,36 +1,43 @@
 # STM32F4-Quad
-STM32F4 based Quadrotor Flight Controller running on the RTOS uC/OS-III, mainly tested in indoor environment. Including attitude control, position control and trajectory tracking.
+[STM32F4](https://www.st.com/en/microcontrollers-microprocessors/stm32f405rg.html) based Quadrotor Flight Controller running on the RTOS uC/OS-III, mainly tested in indoor environment. 
 
-A simple vision-based indoor navigation system is provided, which using active infrared makers as locators.
+Function: Attitude/Position Control and Trajectory Tracking.
 
-The Flight Controller is developed in uVison Keil4 using C, and the indoor positioning system is based on OpenCV3 library.  
-<p align = "center">
-<img width="400" src="https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/tex/figures/my_quad3.jpg" />
-<img width="400" src="https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/tex/figures/my_quad1.jpg" />
+A vision-based (infrared cameras) indoor navigation system (mocap like) is included, which using active infrared makers as locators.
+
+The Flight Controller is developed with uVison Keil4 using C, the positioning system is based on OpenCV library.  
+
+<p align = "left">
+<img height="200" src="./tex/figures/my_quad3.jpg" hspace = "1"/>
+<img height="200" src="./tex/figures/my_quad1.jpg" />
+</p>
+<p align = "left">
+<img height="200" src="./misc/play.gif" hspace="1"/>
+<img height="200" src="./misc/sim.gif" />
 </p>
 
-## Dissertation  
+## Dissertation (Chinese)
 https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
 ## Folder  
 STM32F4-Quad\
-  | -- Indoor_Positionning_System (source code for indoor positioning system in PC)\
-  | -- Matlab (Matlab simulation of the quadrotor)\
-  | -- Quad_indoor_cam(vision) (source code of the flight controller)\
-  | -- Quad_3D_display (position and attitude visualization)\
-  | -- Stereo_Camera_Calibration (code for camera calibration)\
-  \\ -- tex (source code for the dissertation)
+  | -- **Indoor_Positionning_System** (source code for indoor positioning system in PC)\
+  | -- **Matlab** (Matlab simulation of the quadrotor)\
+  | -- **Quad_indoor_cam**(vision) (source code of the flight controller)\
+  | -- **Quad_3D_display** (position and attitude visualization)\
+  | -- **Stereo_Camera_Calibration** (code for camera calibration)\
+  \\ -- **tex** (source code for the dissertation)
 
-## Test video
+## Test Videos
 **Playing music:**  
-https://youtu.be/FTTgFP2V9RU "Little Star"
+["Little Star"](https://youtu.be/FTTgFP2V9RU).
 
 **Gesture control:**  
-https://youtu.be/_VyHRGHKnpY with kinect
+[Kinect](https://youtu.be/_VyHRGHKnpY).
 
 **Trajectory tracking:**
-* 1: https://youtu.be/Airv29XN67Q curve1
-* 2: https://youtu.be/eWLOpIESicU 1D sine
-* 3: https://youtu.be/p_XNRUGR_co 3D 
-* 4: https://youtu.be/EVki9DBirWQ straight line
-* 5: https://youtu.be/JW-OWvRWwpA planar rotate
+- [curve1](https://youtu.be/Airv29XN67Q)
+- [1D sine](https://youtu.be/eWLOpIESicU)
+- [3D path](https://youtu.be/p_XNRUGR_co) 
+- [straight line](https://youtu.be/EVki9DBirWQ)
+- [planar rotating](https://youtu.be/JW-OWvRWwpA)
