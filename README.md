@@ -8,12 +8,13 @@ A vision-based (infrared cameras) indoor navigation system (mocap like) is inclu
 The Flight Controller is developed with uVison Keil4 using C, the positioning system is based on OpenCV library.  
 
 <p align = "left">
-<img height="200" src="./tex/figures/my_quad3.jpg" hspace = "1"/>
-<img height="200" src="./tex/figures/my_quad1.jpg" />
+<!-- <img height="200" src="./tex/figures/my_quad1.jpg" /> -->
+<img height="250" src="./tex/figures/my_quad3.jpg" hspace = "1"/>
+<img height="250" src="./misc/system.png" hspace = "0"/>
 </p>
 <p align = "left">
-<img height="200" src="./misc/play.gif" hspace="1"/>
-<img height="200" src="./misc/sim.gif" />
+<img height="220" src="./misc/play.gif" hspace="1"/>
+<img height="220" src="./misc/sim.gif" />
 </p>
 
 ## Dissertation (Chinese)
