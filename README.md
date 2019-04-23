@@ -17,7 +17,7 @@ The Flight Controller is developed with uVison Keil4 using C, the positioning sy
 <img height="220" src="./misc/sim.gif" />
 </p>
 
-## Dissertation (Chinese)
+## Dissertation (chinese)
 https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
 
 ## Folder  
