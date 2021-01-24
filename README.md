@@ -17,9 +17,6 @@ The Flight Controller is developed with uVison Keil4 using C, the positioning sy
 <img height="220" src="./misc/sim.gif" />
 </p>
 
-## Dissertation (chinese)
-https://github.com/JinyaoZhu/STM32F4-Quad/blob/master/dissertation.pdf
-
 ## Folder  
 STM32F4-Quad\
   | -- **Indoor_Positionning_System** (source code for indoor positioning system in PC)\
